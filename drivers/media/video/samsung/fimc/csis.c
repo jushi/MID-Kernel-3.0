@@ -218,7 +218,7 @@ void s3c_csis_start(int lanes, int settle, int align, int width,
 
 	pdata = to_csis_plat(s3c_csis->dev);
 	if (pdata->cfg_phy_global)
-		pdata->cfg_phy_global(pdev, 1);
+		pdata->cfg_phy_global(/*pdev,*/ 1);
 
 	s3c_csis_reset();
 	s3c_csis_set_nr_lanes(lanes);
@@ -253,7 +253,7 @@ static void s3c_csis_stop(struct platform_device *pdev)
 
 	plat = to_csis_plat(&pdev->dev);
 	if (plat->cfg_phy_global)
-		plat->cfg_phy_global(pdev, 0);
+		plat->cfg_phy_global(/*pdev,*/ 0);
 }
 
 static irqreturn_t s3c_csis_irq(int irq, void *dev_id)
