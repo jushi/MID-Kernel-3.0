@@ -128,6 +128,203 @@ static struct s3c2410_uartcfg mid_uartcfgs[] __initdata = {
 	},
 };
 
+static struct platform_device mid_wlan_ar6000_pm_device = {
+	.name				= "wlan_ar6000_pm_dev",
+	.id					= 1,
+	.num_resources		= 0,
+	.resource			= NULL,
+};
+
+static void
+(*wlan_status_notify_cb)(struct platform_device *dev_id, int card_present);
+struct platform_device *wlan_devid;
+
+static int register_wlan_status_notify
+(void (*callback)(struct platform_device *dev_id, int card_present))
+{
+	wlan_status_notify_cb = callback;
+	return 0;
+}
+
+static int register_wlan_pdev(struct platform_device *pdev)
+{
+	wlan_devid = pdev;
+	printk(KERN_ERR "ATHR register_wlan_pdev pdev->id = %d\n", pdev->id);
+	return 0;
+}
+/*
+#define WLAN_HOST_WAKE
+#ifdef WLAN_HOST_WAKE
+struct wlansleep_info {
+	unsigned host_wake;
+	unsigned host_wake_irq;
+	struct wake_lock wake_lock;
+};
+
+static struct wlansleep_info *wsi;
+static struct tasklet_struct hostwake_task;
+
+static void wlan_hostwake_task(unsigned long data)
+{
+	printk(KERN_INFO "WLAN: wake lock timeout 0.5 sec...\n");
+
+	wake_lock_timeout(&wsi->wake_lock, HZ / 2);
+}
+
+static irqreturn_t wlan_hostwake_isr(int irq, void *dev_id)
+{
+	tasklet_schedule(&hostwake_task);
+	return IRQ_HANDLED;
+}
+
+static int wlan_host_wake_init(void)
+{
+	int ret;
+
+	wsi = kzalloc(sizeof(struct wlansleep_info), GFP_KERNEL);
+	if (!wsi)
+		return -ENOMEM;
+
+	wake_lock_init(&wsi->wake_lock, WAKE_LOCK_SUSPEND, "bluesleep");
+	tasklet_init(&hostwake_task, wlan_hostwake_task, 0);
+
+	wsi->host_wake = GPIO_WLAN_HOST_WAKE;
+	wsi->host_wake_irq = gpio_to_irq(GPIO_WLAN_HOST_WAKE);
+
+	ret = request_irq(wsi->host_wake_irq, wlan_hostwake_isr,
+				IRQF_DISABLED | IRQF_TRIGGER_RISING,
+				"wlan hostwake", NULL);
+	if (ret	< 0) {
+		printk(KERN_ERR "WLAN: Couldn't acquire WLAN_HOST_WAKE IRQ");
+		return -1;
+	}
+
+	ret = enable_irq_wake(wsi->host_wake_irq);
+	if (ret < 0) {
+		printk(KERN_ERR "WLAN: Couldn't enable WLAN_HOST_WAKE as wakeup interrupt");
+		free_irq(wsi->host_wake_irq, NULL);
+		return -1;
+	}
+
+	return 0;
+}
+
+static void wlan_host_wake_exit(void)
+{
+	if (disable_irq_wake(wsi->host_wake_irq))
+		printk(KERN_ERR "WLAN: Couldn't disable hostwake IRQ wakeup mode\n");
+	free_irq(wsi->host_wake_irq, NULL);
+	tasklet_kill(&hostwake_task);
+	wake_lock_destroy(&wsi->wake_lock);
+	kfree(wsi);
+}
+#endif
+
+static void config_wlan_gpio(void)
+{
+	int ret = 0;
+	unsigned int gpio;
+
+	printk(KERN_ERR "ATHR - %s\n", __func__);
+	ret = gpio_request(GPIO_WLAN_HOST_WAKE, "wifi_irq");
+	if (ret < 0) {
+		printk(KERN_ERR "cannot reserve GPIO_WLAN_HOST_WAKE: %s - %d\n"\
+				, __func__, GPIO_WLAN_HOST_WAKE);
+		gpio_free(GPIO_WLAN_HOST_WAKE);
+		return;
+	}
+
+	ret = gpio_request(GPIO_WLAN_EN, "wifi_pwr_33");
+
+	if (ret < 0) {
+		printk(KERN_ERR "cannot reserve GPIO_WLAN_EN: %s - %d\n"\
+				, __func__, GPIO_WLAN_EN);
+		gpio_free(GPIO_WLAN_EN);
+		return;
+	}
+
+	if (system_rev >= 4) {
+		ret = gpio_request(GPIO_WLAN_EN2, "wifi_pwr_18");
+
+		if (ret < 0) {
+			printk(KERN_ERR "cannot reserve GPIO_WLAN_EN2: "\
+					"%s - %d\n", __func__, GPIO_WLAN_EN2);
+			gpio_free(GPIO_WLAN_EN2);
+			return;
+		}
+	}
+
+	ret = gpio_request(GPIO_WLAN_nRST, "wifi_rst");
+
+	if (ret < 0) {
+		printk(KERN_ERR "cannot reserve GPIO_WLAN_nRST: %s - %d\n"\
+				, __func__, GPIO_WLAN_nRST);
+		gpio_free(GPIO_WLAN_nRST);
+		return;
+	}
+
+	gpio_direction_output(GPIO_WLAN_nRST, 0);
+	gpio_direction_output(GPIO_WLAN_EN, 1);
+
+	if (system_rev >= 4)
+		gpio_direction_output(GPIO_WLAN_EN2, 0);
+}
+
+void
+wlan_setup_power(int on, int detect)
+{
+	printk(KERN_ERR "ATHR - %s %s --enter\n", __func__, on ? "on" : "off");
+
+	if (on) {
+
+		if (system_rev >= 4) {
+			gpio_direction_output(GPIO_WLAN_EN2, 1);
+			udelay(10);
+		}
+		gpio_direction_output(GPIO_WLAN_nRST, 0);
+		msleep(30);
+		gpio_direction_output(GPIO_WLAN_nRST, 1);
+
+#ifdef WLAN_HOST_WAKE
+		wlan_host_wake_init();
+#endif
+
+	} else {
+#ifdef WLAN_HOST_WAKE
+		wlan_host_wake_exit();
+#endif
+
+		gpio_direction_output(GPIO_WLAN_nRST, 0);
+		if (system_rev >= 4)
+			gpio_direction_output(GPIO_WLAN_EN2, 0);
+	}
+
+	msleep(100);
+
+	printk(KERN_ERR "ATHR - rev : %02d\n", system_rev);
+
+	if (system_rev >= 4) {
+		printk(KERN_ERR "ATHR - GPIO_WLAN_EN1(%d: %d), "\
+			"GPIO_WLAN_EN2(%d: %d), GPIO_WALN_nRST(%d: %d)\n"\
+			, GPIO_WLAN_EN, gpio_get_value(GPIO_WLAN_EN)
+			, GPIO_WLAN_EN2, gpio_get_value(GPIO_WLAN_EN2)
+			, GPIO_WLAN_nRST, gpio_get_value(GPIO_WLAN_nRST));
+	} else {
+		printk(KERN_ERR "ATHR - GPIO_WLAN_EN(%d: %d), "\
+			" GPIO_WALN_nRST(%d: %d)\n"\
+			, GPIO_WLAN_EN, gpio_get_value(GPIO_WLAN_EN)
+			, GPIO_WLAN_nRST, gpio_get_value(GPIO_WLAN_nRST));
+	}
+
+	if (detect) {
+		if (wlan_status_notify_cb)
+			wlan_status_notify_cb(wlan_devid, on);
+		else
+			printk(KERN_ERR "ATHR - WLAN: No notify available\n");
+	}
+}
+EXPORT_SYMBOL(wlan_setup_power);
+*/
 #ifdef CONFIG_DM9000
 static struct resource mid_dm9000_resources[] = {
 	[0] = {
@@ -1317,6 +1514,46 @@ static void __init sound_init(void) {
 	__raw_writel(reg, S5P_OTHERS);
 }
 
+#ifdef CONFIG_S3C_DEV_HSMMC
+static struct s3c_sdhci_platdata s5pv210_hsmmc0_pdata __initdata = {
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
+	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
+#ifdef CONFIG_S5PV210_SDHCI_CH0_8BIT
+	.max_width = 8,
+	.host_caps = MMC_CAP_8_BIT_DATA,
+#endif
+};
+#endif
+
+#ifdef CONFIG_S3C_DEV_HSMMC1
+static struct s3c_sdhci_platdata s5pv210_hsmmc1_pdata __initdata = {
+/* For Atheros WiFi */
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
+	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
+        .max_width = 4,
+	.ext_cd_init = register_wlan_status_notify,
+	.ext_pdev = register_wlan_pdev
+};
+#endif
+
+#ifdef CONFIG_S3C_DEV_HSMMC2
+static struct s3c_sdhci_platdata s5pv210_hsmmc2_pdata __initdata = {
+	.cd_type = S3C_SDHCI_CD_GPIO,
+	.ext_cd_gpio = S5PV210_GPG3(4),
+	.ext_cd_gpio_invert = 1,
+	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
+};
+#endif
+
+#ifdef CONFIG_S3C_DEV_HSMMC3
+/* For Broadcom WiFi */
+static struct s3c_sdhci_platdata s5pv210_hsmmc3_pdata __initdata = {
+        .cd_type = S3C_SDHCI_CD_PERMANENT,
+	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
+        .max_width = 4,
+};      
+#endif
+
 static void __init mid_setup_clocks(void) {
 	struct clk *pclk;
 	struct clk *clk;
@@ -1644,6 +1881,7 @@ static struct platform_device *mid_devices[] __initdata = {
 #ifdef CONFIG_DM9000
 	&mid_dm9000,
 #endif
+    &mid_wlan_ar6000_pm_device
 };
 
 unsigned int pm_debug_scratchpad;
@@ -1750,19 +1988,16 @@ static void __init mid_machine_init(void) {
 #endif
 
 #ifdef CONFIG_S3C_DEV_HSMMC
-	s5pv210_default_sdhci0();
+s3c_sdhci0_set_platdata(&s5pv210_hsmmc0_pdata);
 #endif
 #ifdef CONFIG_S3C_DEV_HSMMC1
-	s5pv210_default_sdhci1();
+s3c_sdhci1_set_platdata(&s5pv210_hsmmc1_pdata);
 #endif
 #ifdef CONFIG_S3C_DEV_HSMMC2
-	s5pv210_default_sdhci2();
+s3c_sdhci2_set_platdata(&s5pv210_hsmmc2_pdata);
 #endif
 #ifdef CONFIG_S3C_DEV_HSMMC3
-	s5pv210_default_sdhci3();
-#endif
-#ifdef CONFIG_S5PV210_SETUP_SDHCI
-	s3c_sdhci_set_platdata();
+s3c_sdhci3_set_platdata(&s5pv210_hsmmc3_pdata);
 #endif
 
 #ifdef CONFIG_MFD_MAX8998_URBETTER

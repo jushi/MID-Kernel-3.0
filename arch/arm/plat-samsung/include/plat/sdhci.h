@@ -74,6 +74,8 @@ struct s3c_sdhci_platdata {
 
 	int		ext_cd_gpio;
 	bool		ext_cd_gpio_invert;
+	unsigned int	pm_flags;
+
 	int	(*ext_cd_init)(void (*notify_func)(struct platform_device *,
 						   int state));
 	int	(*ext_cd_cleanup)(void (*notify_func)(struct platform_device *,
@@ -84,15 +86,9 @@ struct s3c_sdhci_platdata {
 			    void __iomem *regbase,
 			    struct mmc_ios *ios,
 			    struct mmc_card *card);
-	void	(*adjust_cfg_card)(struct s3c_sdhci_platdata *pdata, void __iomem *regbase, int rw);
-	int		rx_cfg;
-	int		tx_cfg;
 
-        /* add to deal with non-removable device */
-        int     built_in;
+	int (*ext_pdev)(struct platform_device *dev_id);
 
-	int must_maintain_clock;
-	int enable_intr_on_resume;
 };
 
 /**
@@ -103,7 +99,6 @@ struct s3c_sdhci_platdata {
  * The call will copy the platform data, so the board definitions can
  * make the structure itself __initdata.
  */
-extern void s3c_sdhci_set_platdata(void);
 extern void s3c_sdhci0_set_platdata(struct s3c_sdhci_platdata *pd);
 extern void s3c_sdhci1_set_platdata(struct s3c_sdhci_platdata *pd);
 extern void s3c_sdhci2_set_platdata(struct s3c_sdhci_platdata *pd);
@@ -136,6 +131,10 @@ extern void exynos4_setup_sdhci0_cfg_gpio(struct platform_device *, int w);
 extern void exynos4_setup_sdhci1_cfg_gpio(struct platform_device *, int w);
 extern void exynos4_setup_sdhci2_cfg_gpio(struct platform_device *, int w);
 extern void exynos4_setup_sdhci3_cfg_gpio(struct platform_device *, int w);
+extern void exynos5_setup_sdhci0_cfg_gpio(struct platform_device *, int w);
+extern void exynos5_setup_sdhci1_cfg_gpio(struct platform_device *, int w);
+extern void exynos5_setup_sdhci2_cfg_gpio(struct platform_device *, int w);
+extern void exynos5_setup_sdhci3_cfg_gpio(struct platform_device *, int w);
 
 /* S3C2416 SDHCI setup */
 
@@ -299,10 +298,9 @@ static inline void s5pc100_default_sdhci2(void) { }
 extern char *s5pv210_hsmmc_clksrcs[4];
 
 extern void s5pv210_setup_sdhci_cfg_card(struct platform_device *dev,
-					 void __iomem *r,
-					 struct mmc_ios *ios,
-					 struct mmc_card *card);
-extern void s5pv210_adjust_sdhci_cfg_card(struct s3c_sdhci_platdata *pdata, void __iomem *r, int rw);
+					   void __iomem *r,
+					   struct mmc_ios *ios,
+					   struct mmc_card *card);
 
 static inline void s5pv210_default_sdhci0(void)
 {
@@ -310,7 +308,6 @@ static inline void s5pv210_default_sdhci0(void)
 	s3c_hsmmc0_def_platdata.clocks = s5pv210_hsmmc_clksrcs;
 	s3c_hsmmc0_def_platdata.cfg_gpio = s5pv210_setup_sdhci0_cfg_gpio;
 	s3c_hsmmc0_def_platdata.cfg_card = s5pv210_setup_sdhci_cfg_card;
-	s3c_hsmmc0_def_platdata.adjust_cfg_card = s5pv210_adjust_sdhci_cfg_card;
 #endif
 }
 
@@ -320,7 +317,6 @@ static inline void s5pv210_default_sdhci1(void)
 	s3c_hsmmc1_def_platdata.clocks = s5pv210_hsmmc_clksrcs;
 	s3c_hsmmc1_def_platdata.cfg_gpio = s5pv210_setup_sdhci1_cfg_gpio;
 	s3c_hsmmc1_def_platdata.cfg_card = s5pv210_setup_sdhci_cfg_card;
-	s3c_hsmmc1_def_platdata.adjust_cfg_card = s5pv210_adjust_sdhci_cfg_card;
 #endif
 }
 
@@ -330,7 +326,6 @@ static inline void s5pv210_default_sdhci2(void)
 	s3c_hsmmc2_def_platdata.clocks = s5pv210_hsmmc_clksrcs;
 	s3c_hsmmc2_def_platdata.cfg_gpio = s5pv210_setup_sdhci2_cfg_gpio;
 	s3c_hsmmc2_def_platdata.cfg_card = s5pv210_setup_sdhci_cfg_card;
-	s3c_hsmmc2_def_platdata.adjust_cfg_card = s5pv210_adjust_sdhci_cfg_card;
 #endif
 }
 
@@ -340,7 +335,6 @@ static inline void s5pv210_default_sdhci3(void)
 	s3c_hsmmc3_def_platdata.clocks = s5pv210_hsmmc_clksrcs;
 	s3c_hsmmc3_def_platdata.cfg_gpio = s5pv210_setup_sdhci3_cfg_gpio;
 	s3c_hsmmc3_def_platdata.cfg_card = s5pv210_setup_sdhci_cfg_card;
-	s3c_hsmmc3_def_platdata.adjust_cfg_card = s5pv210_adjust_sdhci_cfg_card;
 #endif
 }
 
@@ -407,4 +401,56 @@ static inline void exynos4_default_sdhci3(void) { }
 
 extern void sdhci_s3c_force_presence_change(struct platform_device *pdev);
 
+/* EXYNOS5 SDHCI setup */
+#ifdef CONFIG_EXYNOS4_SETUP_SDHCI
+extern char *exynos4_hsmmc_clksrcs[4];
+
+extern void exynos4_setup_sdhci_cfg_card(struct platform_device *dev,
+					   void __iomem *r,
+					   struct mmc_ios *ios,
+					   struct mmc_card *card);
+
+static inline void exynos5_default_sdhci0(void)
+{
+#ifdef CONFIG_S3C_DEV_HSMMC
+	s3c_hsmmc0_def_platdata.clocks = exynos4_hsmmc_clksrcs;
+	s3c_hsmmc0_def_platdata.cfg_gpio = exynos5_setup_sdhci0_cfg_gpio;
+	s3c_hsmmc0_def_platdata.cfg_card = exynos4_setup_sdhci_cfg_card;
+#endif
+}
+
+static inline void exynos5_default_sdhci1(void)
+{
+#ifdef CONFIG_S3C_DEV_HSMMC1
+	s3c_hsmmc1_def_platdata.clocks = exynos4_hsmmc_clksrcs;
+	s3c_hsmmc1_def_platdata.cfg_gpio = exynos5_setup_sdhci1_cfg_gpio;
+	s3c_hsmmc1_def_platdata.cfg_card = exynos4_setup_sdhci_cfg_card;
+#endif
+}
+
+static inline void exynos5_default_sdhci2(void)
+{
+#ifdef CONFIG_S3C_DEV_HSMMC2
+	s3c_hsmmc2_def_platdata.clocks = exynos4_hsmmc_clksrcs;
+	s3c_hsmmc2_def_platdata.cfg_gpio = exynos5_setup_sdhci2_cfg_gpio;
+	s3c_hsmmc2_def_platdata.cfg_card = exynos4_setup_sdhci_cfg_card;
+#endif
+}
+
+static inline void exynos5_default_sdhci3(void)
+{
+#ifdef CONFIG_S3C_DEV_HSMMC3
+	s3c_hsmmc3_def_platdata.clocks = exynos4_hsmmc_clksrcs;
+	s3c_hsmmc3_def_platdata.cfg_gpio = exynos5_setup_sdhci3_cfg_gpio;
+	s3c_hsmmc3_def_platdata.cfg_card = exynos4_setup_sdhci_cfg_card;
+#endif
+}
+
+#else
+static inline void exynos5_default_sdhci0(void) { }
+static inline void exynos5_default_sdhci1(void) { }
+static inline void exynos5_default_sdhci2(void) { }
+static inline void exynos5_default_sdhci3(void) { }
+
+#endif /* CONFIG_EXYNOS4_SETUP_SDHCI */
 #endif /* __PLAT_S3C_SDHCI_H */
