@@ -146,7 +146,7 @@ void universal_sdhci2_cfg_ext_cd(void)
 }
 
 static struct s3c_sdhci_platdata hsmmc0_platdata = {
-	.cd_type = S3C_SDHCI_CD_PERMANENT;
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
 #if defined(CONFIG_S5PV210_SD_CH0_8BIT)
 	.max_width	= 8,
 	.host_caps	= MMC_CAP_8_BIT_DATA,
@@ -155,13 +155,13 @@ static struct s3c_sdhci_platdata hsmmc0_platdata = {
 
 #if defined(CONFIG_S3C_DEV_HSMMC1)
 static struct s3c_sdhci_platdata hsmmc1_platdata = {
-	.cd_type = S3C_SDHCI_CD_PERMANENT;
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
 };
 #endif
 
 #if defined(CONFIG_S3C_DEV_HSMMC2)
 static struct s3c_sdhci_platdata hsmmc2_platdata = {
-	.cd_type = S3C_SDHCI_CD_INTERNAL;
+	.cd_type = S3C_SDHCI_CD_INTERNAL,
 #if defined(CONFIG_S5PV210_SD_CH2_8BIT)
 	.max_width	= 8,
 	.host_caps	= MMC_CAP_8_BIT_DATA,
@@ -171,7 +171,7 @@ static struct s3c_sdhci_platdata hsmmc2_platdata = {
 
 #if defined(CONFIG_S3C_DEV_HSMMC3)
 static struct s3c_sdhci_platdata hsmmc3_platdata = {
-	.cd_type = S3C_SDHCI_CD_PERMANENT;
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
 };
 #endif
 
