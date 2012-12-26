@@ -32,7 +32,7 @@
 
 char *s5pv210_hsmmc_clksrcs[4] = {
 	[0] = "hsmmc",		/* HCLK */
-	[1] = "hsmmc",		/* duplicate HCLK entry */
+	[1] = NULL/*"hsmmc"*/,		/* duplicate HCLK entry */
 	[2] = "sclk_mmc",	/* mmc_bus */
 	[3] = NULL,			/* reserved */
 };
@@ -49,50 +49,40 @@ void s5pv210_setup_sdhci_cfg_card(struct platform_device *dev,
 				    struct mmc_ios *ios,
 				    struct mmc_card *card)
 {
-	u32 ctrl2;
-	u32 ctrl3;
+	u32 ctrl2, ctrl3;
 
-	writel(S3C64XX_SDHCI_CONTROL4_DRIVE_9mA, r + S3C64XX_SDHCI_CONTROL4);
+	/* don't need to alter anything according to card-type */
 
 	ctrl2 = readl(r + S3C_SDHCI_CONTROL2);
+
+	/* select base clock source to HCLK */
+
 	ctrl2 &= S3C_SDHCI_CTRL2_SELBASECLK_MASK;
+
+	/*
+	 * clear async mode, enable conflict mask, rx feedback ctrl, SD
+	 * clk hold and no use debounce count
+	 */
+
 	ctrl2 |= (S3C64XX_SDHCI_CTRL2_ENSTAASYNCCLR |
 		  S3C64XX_SDHCI_CTRL2_ENCMDCNFMSK |
+		  S3C_SDHCI_CTRL2_ENFBCLKRX |
 		  S3C_SDHCI_CTRL2_DFCNT_NONE |
 		  S3C_SDHCI_CTRL2_ENCLKOUTHOLD);
 
-	if (ios->clock <= (600 * 1000)) {
-		ctrl2 &= ~(S3C_SDHCI_CTRL2_ENFBCLKTX |
-			   S3C_SDHCI_CTRL2_ENFBCLKRX);
-		ctrl3 = 0;
-	} else {
-		u32 range_start;
-		u32 range_end;
+	/* Tx and Rx feedback clock delay control */
 
-		ctrl2 |= S3C_SDHCI_CTRL2_ENFBCLKTX |
-			 S3C_SDHCI_CTRL2_ENFBCLKRX;
-
-		if (dev->id == 0 || dev->id == 2)	/* MMC */
-			range_start = 20 * 1000 * 1000;
-		else								/* SDIO */
-			range_start = 25 * 1000 * 1000;
-
-		range_end = 60 * 1000 * 1000;
-
-		if ((ios->clock > range_start) && (ios->clock < range_end))
-			ctrl3 = S3C_SDHCI_CTRL3_FCSELTX_BASIC |
-				S3C_SDHCI_CTRL3_FCSELRX_BASIC;
-		else if (dev->id == 1 || dev->id == 3) {
-			ctrl2 &= ~S3C_SDHCI_CTRL2_ENFBCLKTX;
-			ctrl3 = 0;
-		} else
-			ctrl3 = S3C_SDHCI_CTRL3_FCSELTX_BASIC |
-				S3C_SDHCI_CTRL3_FCSELRX_INVERT;
-	}
-
+	if (ios->clock < 25 * 1000000)
+		ctrl3 = (S3C_SDHCI_CTRL3_FCSEL3 |
+			 S3C_SDHCI_CTRL3_FCSEL2 |
+			 S3C_SDHCI_CTRL3_FCSEL1 |
+			 S3C_SDHCI_CTRL3_FCSEL0);
+	else
+		ctrl3 = (S3C_SDHCI_CTRL3_FCSEL1 | S3C_SDHCI_CTRL3_FCSEL0);
 
 	writel(ctrl2, r + S3C_SDHCI_CONTROL2);
 	writel(ctrl3, r + S3C_SDHCI_CONTROL3);
+
 }
 
 void s5pv210_adjust_sdhci_cfg_card(struct s3c_sdhci_platdata *pdata,
@@ -146,6 +136,7 @@ void universal_sdhci2_cfg_ext_cd(void)
 }
 
 static struct s3c_sdhci_platdata hsmmc0_platdata = {
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
 #if defined(CONFIG_S5PV210_SD_CH0_8BIT)
 	.max_width	= 8,
 	.host_caps	= MMC_CAP_8_BIT_DATA,
@@ -153,7 +144,11 @@ static struct s3c_sdhci_platdata hsmmc0_platdata = {
 };
 
 #if defined(CONFIG_S3C_DEV_HSMMC1)
-static struct s3c_sdhci_platdata hsmmc1_platdata = { 0 };
+static struct s3c_sdhci_platdata hsmmc1_platdata = {
+	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
+	.max_width	= 4
+};
 #endif
 
 #if defined(CONFIG_S3C_DEV_HSMMC2)
@@ -166,7 +161,10 @@ static struct s3c_sdhci_platdata hsmmc2_platdata = {
 #endif
 
 #if defined(CONFIG_S3C_DEV_HSMMC3)
-static struct s3c_sdhci_platdata hsmmc3_platdata = { 0 };
+static struct s3c_sdhci_platdata hsmmc3_platdata = {
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
+	.max_width	= 4
+};
 #endif
 
 /*
@@ -183,12 +181,10 @@ void s3c_sdhci_set_platdata(void)
 {
 #if defined(CONFIG_S3C_DEV_HSMMC)
     // namko: MID: Internal SD
-	hsmmc0_platdata.cd_type = S3C_SDHCI_CD_PERMANENT;
 	s3c_sdhci0_set_platdata(&hsmmc0_platdata);
 #endif
 #if defined(CONFIG_S3C_DEV_HSMMC1)
     // namko: MID: Atheros WiFi
-	hsmmc1_platdata.cd_type = S3C_SDHCI_CD_PERMANENT;
 	s3c_sdhci1_set_platdata(&hsmmc1_platdata);
 #endif
 #if defined(CONFIG_S3C_DEV_HSMMC2)
@@ -197,7 +193,6 @@ void s3c_sdhci_set_platdata(void)
 #endif
 #if defined(CONFIG_S3C_DEV_HSMMC3)
     // namko: MID: Broadcom WiFi
-	hsmmc3_platdata.cd_type = S3C_SDHCI_CD_PERMANENT;
 	s3c_sdhci3_set_platdata(&hsmmc3_platdata);
 #endif
 };
