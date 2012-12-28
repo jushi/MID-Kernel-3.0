@@ -1518,7 +1518,7 @@ static void __init sound_init(void) {
 static struct s3c_sdhci_platdata s5pv210_hsmmc0_pdata __initdata = {
 	.cd_type = S3C_SDHCI_CD_PERMANENT,
 	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
-#ifdef CONFIG_S5PV210_SDHCI_CH0_8BIT
+#ifdef CONFIG_S5PV210_SD_CH0_8BIT
 	.max_width = 8,
 	.host_caps = MMC_CAP_8_BIT_DATA,
 #endif
@@ -1530,7 +1530,7 @@ static struct s3c_sdhci_platdata s5pv210_hsmmc1_pdata __initdata = {
 /* For Atheros WiFi */
 	.cd_type = S3C_SDHCI_CD_PERMANENT,
 	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
-        .max_width = 4,
+    .max_width = 4,
 	.ext_cd_init = register_wlan_status_notify,
 	.ext_pdev = register_wlan_pdev
 };
@@ -1548,10 +1548,10 @@ static struct s3c_sdhci_platdata s5pv210_hsmmc2_pdata __initdata = {
 #ifdef CONFIG_S3C_DEV_HSMMC3
 /* For Broadcom WiFi */
 static struct s3c_sdhci_platdata s5pv210_hsmmc3_pdata __initdata = {
-        .cd_type = S3C_SDHCI_CD_PERMANENT,
+    .cd_type = S3C_SDHCI_CD_PERMANENT,
 	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
-        .max_width = 4,
-};      
+    .max_width = 4,
+};
 #endif
 
 static void __init mid_setup_clocks(void) {

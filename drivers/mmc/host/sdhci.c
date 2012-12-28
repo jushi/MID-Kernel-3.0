@@ -1000,7 +1000,7 @@ static void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 	mod_timer(&host->timer, jiffies + 10 * HZ);
 
 	host->cmd = cmd;
-	
+
 	sdhci_enable_clock_card(host);
 	sdhci_prepare_data(host, cmd);
 
