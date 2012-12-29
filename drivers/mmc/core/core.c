@@ -1017,6 +1017,8 @@ static void mmc_power_up(struct mmc_host *host)
 {
 	int bit;
 
+	dev_info(mmc_dev(host),
+			"mmc_power_up() called\n");
 	mmc_host_clk_hold(host);
 
 	/* If ocr is set, we use it */
