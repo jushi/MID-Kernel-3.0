@@ -138,7 +138,7 @@ s32 mma7660_Read_Alert(struct i2c_client *client, u8 RegAdd) {
 static int mma7660_read_data(struct i2c_client *client , short *x, short *y, short *z) {
     u8    tmp_data[4];
     s32   res;
-    //short temp;
+    short temp;
 
     res = (i2c_smbus_read_i2c_block_data(client, REG_XOUT, REG_ZOUT - REG_XOUT + 1, tmp_data) < 
             REG_ZOUT - REG_XOUT + 1);
@@ -183,10 +183,9 @@ static int mma7660_read_data(struct i2c_client *client , short *x, short *y, sho
         *z |= 0xffc0;
 
     // The orientation is 90 degrees off the mark. Hence swap x and y.
-    // jushi: Do not swap because it is wrong :)
-    //temp = *x;
-    //*x = *y;
-    //*y = temp;
+    temp = *x;
+    *x = *y;
+    *y = temp;
 
     return 0;
 }
