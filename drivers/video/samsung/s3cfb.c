@@ -116,7 +116,7 @@ static irqreturn_t s3cfb_irq_frame(int irq, void *data)
 
 	fbdev->vsync_timestamp = ktime_get();
 	wmb();
-	wake_up_interruptible(&fbdev->vsync_wq);
+	wake_up_interruptible(&fbdev->vsync_wait);
 
 	return IRQ_HANDLED;
 }
@@ -143,7 +143,7 @@ static int s3cfb_init_global(struct s3cfb_global *ctrl)
 	ctrl->output = OUTPUT_RGB;
 	ctrl->rgb_mode = MODE_RGB_P;
 
-	init_waitqueue_head(&ctrl->vsync_wq);
+	init_waitqueue_head(&ctrl->vsync_wait);
 	mutex_init(&ctrl->lock);
 
 	s3cfb_set_output(ctrl);
@@ -573,18 +573,14 @@ static int s3cfb_wait_for_vsync(struct s3cfb_global *ctrl)
 	ktime_t prev_timestamp;
 	int ret;
 
-	dev_dbg(ctrl->dev, "waiting for VSYNC interrupt\n");
-
 	prev_timestamp = ctrl->vsync_timestamp;
-	ret = wait_event_interruptible_timeout(ctrl->vsync_wq,
+	ret = wait_event_interruptible_timeout(ctrl->vsync_wait,
 			s3cfb_vsync_timestamp_changed(ctrl, prev_timestamp),
 			msecs_to_jiffies(100));
 	if (ret == 0)
 		return -ETIMEDOUT;
 	if (ret < 0)
 		return ret;
-
-	dev_dbg(ctrl->dev, "got a VSYNC interrupt\n");
 
 	return ret;
 }
@@ -610,6 +606,15 @@ static int s3cfb_ioctl(struct fb_info *fb, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case FBIO_WAITFORVSYNC:
 		s3cfb_wait_for_vsync(fbdev);
+		break;
+
+	// Custom IOCTL added to return the VSYNC timestamp
+	case S3CFB_WAIT_FOR_VSYNC:
+		ret = s3cfb_wait_for_vsync(fbdev);
+		if(ret > 0) {
+			u64 nsecs = ktime_to_ns(fbdev->vsync_timestamp);
+			copy_to_user((void*)arg, &nsecs, sizeof(u64));
+		}
 		break;
 
 	case S3CFB_WIN_POSITION:
@@ -919,31 +924,6 @@ static int s3cfb_sysfs_store_win_power(struct device *dev,
 	return len;
 }
 
-static int s3cfb_wait_for_vsync_thread(void *data)
-{
-	struct s3cfb_global *fbdev = data;
-
-	while (!kthread_should_stop()) {
-		ktime_t prev_timestamp = fbdev->vsync_timestamp;
-		int ret = wait_event_interruptible_timeout(fbdev->vsync_wq,
-				s3cfb_vsync_timestamp_changed(fbdev,
-						prev_timestamp),
-				msecs_to_jiffies(100));
-		if (ret > 0) {
-			char *envp[2];
-			char buf[64];
-			snprintf(buf, sizeof(buf), "VSYNC=%llu",
-					ktime_to_ns(fbdev->vsync_timestamp));
-			envp[0] = buf;
-			envp[1] = NULL;
-			kobject_uevent_env(&fbdev->dev->kobj, KOBJ_CHANGE,
-					envp);
-		}
-	}
-
-	return 0;
-}
-
 static DEVICE_ATTR(win_power, S_IRUGO | S_IWUSR,
 		   s3cfb_sysfs_show_win_power, s3cfb_sysfs_store_win_power);
 
@@ -953,8 +933,7 @@ static int __devinit s3cfb_probe(struct platform_device *pdev)
 	struct s3cfb_global *fbdev;
 	struct resource *res;
 	int i, j, ret = 0;
-    
-    
+
 	fbdev = kzalloc(sizeof(struct s3cfb_global), GFP_KERNEL);
 	if (!fbdev) {
 		dev_err(fbdev->dev, "failed to allocate for "
@@ -963,7 +942,7 @@ static int __devinit s3cfb_probe(struct platform_device *pdev)
 		goto err_global;
 	}
 	fbdev->dev = &pdev->dev;
-	
+
 	fbdev->regulator = regulator_get(&pdev->dev, "pd");
 	if (!fbdev->regulator) {
 		dev_err(fbdev->dev, "failed to get regulator\n");
@@ -977,40 +956,13 @@ static int __devinit s3cfb_probe(struct platform_device *pdev)
 		goto err_regulator;
 	}
 
-#ifndef CONFIG_MACH_MID
-	fbdev->vcc_lcd = regulator_get(&pdev->dev, "vcc_lcd");
-	if (!fbdev->vcc_lcd) {
-		dev_err(fbdev->dev, "failed to get vcc_lcd\n");
-		ret = -EINVAL;
-		goto err_vcc_lcd;
-	}
-	ret = regulator_enable(fbdev->vcc_lcd);
-	if (ret < 0) {
-		dev_err(fbdev->dev, "failed to enable vcc_lcd\n");
-		ret = -EINVAL;
-		goto err_vcc_lcd;
-	}
-
-	fbdev->vlcd = regulator_get(&pdev->dev, "vlcd");
-	if (!fbdev->vlcd) {
-		dev_err(fbdev->dev, "failed to get vlcd\n");
-		ret = -EINVAL;
-		goto err_vlcd;
-	}
-	ret = regulator_enable(fbdev->vlcd);
-	if (ret < 0) {
-		dev_err(fbdev->dev, "failed to enable vlcd\n");
-		ret = -EINVAL;
-		goto err_vlcd;
-	}
-#endif
 	pdata = to_fb_plat(&pdev->dev);
 	if (!pdata) {
 		dev_err(fbdev->dev, "failed to get platform data\n");
 		ret = -EINVAL;
 		goto err_pdata;
 	}
-    
+
 	fbdev->lcd = (struct s3cfb_lcd *)pdata->lcd;
 
 	if (pdata->cfg_gpio)
@@ -1025,7 +977,7 @@ static int __devinit s3cfb_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err_io;
 	}
-    
+
 	res = request_mem_region(res->start,
 				 res->end - res->start + 1, pdev->name);
 	if (!res) {
@@ -1033,28 +985,28 @@ static int __devinit s3cfb_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err_io;
 	}
-    
+
 	fbdev->regs = ioremap(res->start, res->end - res->start + 1);
 	if (!fbdev->regs) {
 		dev_err(fbdev->dev, "failed to remap io region\n");
 		ret = -EINVAL;
 		goto err_mem;
 	}
-    
+
 	s3cfb_set_vsync_interrupt(fbdev, 1);
 	s3cfb_set_global_interrupt(fbdev, 1);
 	s3cfb_init_global(fbdev);
-    
+
 	if (s3cfb_alloc_framebuffer(fbdev)) {
 		ret = -ENOMEM;
 		goto err_alloc;
 	}
-    
+
 	if (s3cfb_register_framebuffer(fbdev)) {
 		ret = -EINVAL;
 		goto err_register;
 	}
-    
+
 	s3cfb_set_clock(fbdev);
 	s3cfb_set_window(fbdev, pdata->default_win, 1);
 
@@ -1067,12 +1019,8 @@ static int __devinit s3cfb_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err_irq;
 	}
-    
+
 #ifdef CONFIG_FB_S3C_LCD_INIT
-#if defined(CONFIG_FB_S3C_TL2796)
-	if (pdata->backlight_on)
-		pdata->backlight_on(pdev);
-#endif
 	if (!bootloaderfb && pdata->reset_lcd)
 		pdata->reset_lcd(pdev);
 #endif
@@ -1083,18 +1031,11 @@ static int __devinit s3cfb_probe(struct platform_device *pdev)
 	fbdev->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
 	register_early_suspend(&fbdev->early_suspend);
 #endif
-    
-	fbdev->vsync_thread = kthread_run(s3cfb_wait_for_vsync_thread,
-			fbdev, "s3cfb-vsync");
-	if (fbdev->vsync_thread == ERR_PTR(-ENOMEM)) {
-		dev_err(fbdev->dev, "failed to run vsync thread\n");
-		fbdev->vsync_thread = NULL;
-	}
 
 	ret = device_create_file(&(pdev->dev), &dev_attr_win_power);
 	if (ret < 0)
 		dev_err(fbdev->dev, "failed to add sysfs entries\n");
-    
+
 	dev_info(fbdev->dev, "registered successfully\n");
 
 	return 0;
@@ -1126,14 +1067,6 @@ err_io:
 	pdata->clk_off(pdev, &fbdev->clock);
 
 err_pdata:
-#ifndef CONFIG_MACH_MID
-	regulator_disable(fbdev->vlcd);
-
-err_vlcd:
-	regulator_disable(fbdev->vcc_lcd);
-
-err_vcc_lcd:
-#endif
 	regulator_disable(fbdev->regulator);
 
 err_regulator:
@@ -1185,9 +1118,6 @@ static int __devexit s3cfb_remove(struct platform_device *pdev)
 
 	regulator_disable(fbdev->regulator);
 
-	if (fbdev->vsync_thread)
-		kthread_stop(fbdev->vsync_thread);
-
 	kfree(fbdev->fb);
 	kfree(fbdev);
 
@@ -1203,19 +1133,11 @@ void s3cfb_early_suspend(struct early_suspend *h)
 
 	pr_debug("s3cfb_early_suspend is called\n");
 
-    // namko: Turn off the backlight; not the regulator.
+	s3cfb_display_off(fbdev);
+	clk_disable(fbdev->clock);
 	if (pdata->backlight_onoff)
 		pdata->backlight_onoff(pdev, 0);
 
-	s3cfb_display_off(fbdev);
-	clk_disable(fbdev->clock);
-#if defined(CONFIG_FB_S3C_TL2796)
-	lcd_cfg_gpio_early_suspend();
-#endif
-#ifndef CONFIG_MACH_MID
-	regulator_disable(fbdev->vlcd);
-	regulator_disable(fbdev->vcc_lcd);
-#endif
 	regulator_disable(fbdev->regulator);
 
 	return ;
@@ -1237,19 +1159,6 @@ void s3cfb_late_resume(struct early_suspend *h)
 	if (ret < 0)
 		dev_err(fbdev->dev, "failed to enable regulator\n");
 
-#ifndef CONFIG_MACH_MID
-	ret = regulator_enable(fbdev->vcc_lcd);
-	if (ret < 0)
-		dev_err(fbdev->dev, "failed to enable vcc_lcd\n");
-
-	ret = regulator_enable(fbdev->vlcd);
-	if (ret < 0)
-		dev_err(fbdev->dev, "failed to enable vlcd\n");
-#endif
-
-#if defined(CONFIG_FB_S3C_TL2796)
-	lcd_cfg_gpio_late_resume();
-#endif
 	dev_dbg(fbdev->dev, "wake up from suspend\n");
 	if (pdata->cfg_gpio)
 		pdata->cfg_gpio(pdev);
@@ -1273,11 +1182,7 @@ void s3cfb_late_resume(struct early_suspend *h)
 
 	s3cfb_set_vsync_interrupt(fbdev, 1);
 	s3cfb_set_global_interrupt(fbdev, 1);
-#ifndef CONFIG_MACH_MID
-    // namko: Reset turns on the backlight, no need to call this.
-	if (pdata->backlight_on)
-		pdata->backlight_on(pdev);
-#endif
+
 	if (pdata->reset_lcd)
 		pdata->reset_lcd(pdev);
 
@@ -1296,7 +1201,6 @@ static struct platform_driver s3cfb_driver = {
 
 static int __init s3cfb_register(void)
 {
-    
 	platform_driver_register(&s3cfb_driver);
 
 	return 0;

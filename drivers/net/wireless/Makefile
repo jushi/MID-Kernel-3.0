@@ -61,3 +61,4 @@ obj-$(CONFIG_MWIFIEX)	+= mwifiex/
 
 obj-$(CONFIG_BCM4329)	+= bcm4329/
 obj-$(CONFIG_BCMDHD)	+= bcmdhd/
+obj-$(CONFIG_AR6K)  += ar6k/host/os/linux/

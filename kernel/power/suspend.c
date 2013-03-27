@@ -27,6 +27,7 @@
 #include <trace/events/power.h>
 
 #include "power.h"
+#include <mach/regs-clock.h>
 
 const char *const pm_states[PM_SUSPEND_MAX] = {
 #ifdef CONFIG_EARLYSUSPEND
@@ -272,6 +273,11 @@ static void suspend_finish(void)
 int enter_state(suspend_state_t state)
 {
 	int error;
+	unsigned int reg_val;
+
+#if 1	
+	__raw_writel(0xDEADDEAD, S5P_INFORM4);
+#endif
 
 	if (!valid_state(state))
 		return -ENODEV;
@@ -282,6 +288,16 @@ int enter_state(suspend_state_t state)
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	sys_sync();
 	printk("done.\n");
+
+
+#if 1	
+		__raw_writel(0, S5P_INFORM4);
+		__raw_writel(0, S5P_INFORM5);
+		reg_val = __raw_readl(S5P_INFORM6);
+		__raw_writel(0xC00000FF & reg_val, S5P_INFORM6);  //keep reset status and lcd early suspend/late resume value
+#endif
+
+
 
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();
@@ -298,7 +314,20 @@ int enter_state(suspend_state_t state)
 
  Finish:
 	pr_debug("PM: Finishing wakeup.\n");
+#ifdef CONFIG_SUSPEND
+	extern int pm_save_info(int reg_num, unsigned int bitfield, unsigned int step);
+	pm_save_info(5,0xF000000,0x1000000);
+#endif
 	suspend_finish();
+#ifdef CONFIG_SUSPEND
+	extern int pm_save_info(int reg_num, unsigned int bitfield, unsigned int step);
+	pm_save_info(5,0xF000000,0x1000000);
+#endif
+
+#if 1	
+		__raw_writel(0xBEEFBEEF, S5P_INFORM4);
+#endif
+
  Unlock:
 	mutex_unlock(&pm_mutex);
 	return error;
@@ -318,3 +347,28 @@ int pm_suspend(suspend_state_t state)
 	return -EINVAL;
 }
 EXPORT_SYMBOL(pm_suspend);
+
+int pm_save_info(int reg_num, unsigned int bitfield, unsigned int step)
+{
+	//reg_num : 4 : 5 : 6
+	const volatile void __iomem *reg;
+	unsigned int reg_val;
+	unsigned int tmp;
+	if (reg_num == 4) {
+		reg = S5P_INFORM4;
+	} else if  (reg_num == 5) {
+		reg = S5P_INFORM5;
+	} else {
+		reg = S5P_INFORM6;
+	}
+	reg_val = __raw_readl(reg);
+	printk(KERN_DEBUG"%s : r in%d=%x\n",__FUNCTION__,reg_num,reg_val);
+	tmp = reg_val;
+	tmp = tmp + step;
+	tmp = tmp & bitfield;//0xFF00;
+	reg_val = (reg_val & (~bitfield)) | tmp; //0xFFFF00FF
+	__raw_writel(reg_val, reg);
+	printk(KERN_DEBUG"%s : w in%d=%x\n",__FUNCTION__,reg_num,reg_val);
+	return 0;
+}
+EXPORT_SYMBOL(pm_save_info);

@@ -22,6 +22,8 @@
 #include <linux/workqueue.h>
 
 #include "power.h"
+#include <linux/io.h>
+#include <mach/regs-clock.h>
 
 enum {
 	DEBUG_USER_STATE = 1U << 0,
@@ -76,6 +78,11 @@ static void early_suspend(struct work_struct *work)
 	struct early_suspend *pos;
 	unsigned long irqflags;
 	int abort = 0;
+	unsigned int reg_val;
+	
+	reg_val = __raw_readl(S5P_INFORM6);
+	__raw_writel(0xC0000000 & reg_val, S5P_INFORM6);  //keep reset status
+
 
 	mutex_lock(&early_suspend_lock);
 	spin_lock_irqsave(&state_lock, irqflags);
@@ -119,6 +126,11 @@ static void late_resume(struct work_struct *work)
 	struct early_suspend *pos;
 	unsigned long irqflags;
 	int abort = 0;
+	int i=0;
+#ifdef CONFIG_SUSPEND
+	extern int pm_save_info(int reg_num, unsigned int bitfield, unsigned int step);
+	pm_save_info(5,0xF0,0x10);
+#endif	
 
 	mutex_lock(&early_suspend_lock);
 	spin_lock_irqsave(&state_lock, irqflags);
@@ -136,6 +148,10 @@ static void late_resume(struct work_struct *work)
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("late_resume: call handlers\n");
 	list_for_each_entry_reverse(pos, &early_suspend_handlers, link) {
+#ifdef CONFIG_SUSPEND
+	extern int pm_save_info(int reg_num, unsigned int bitfield, unsigned int step);
+	pm_save_info(5,0xF0,0x10);
+#endif	
 		if (pos->resume != NULL) {
 			if (debug_mask & DEBUG_VERBOSE)
 				pr_info("late_resume: calling %pf\n", pos->resume);
@@ -174,8 +190,17 @@ void request_suspend_state(suspend_state_t new_state)
 		queue_work(suspend_work_queue, &early_suspend_work);
 	} else if (old_sleep && new_state == PM_SUSPEND_ON) {
 		state &= ~SUSPEND_REQUESTED;
+#ifdef CONFIG_SUSPEND
+		__raw_writel(0,S5P_INFORM5);
+		extern int pm_save_info(int reg_num, unsigned int bitfield, unsigned int step);
+		pm_save_info(5,0xF,0x1);
+#endif
 		wake_lock(&main_wake_lock);
 		queue_work(suspend_work_queue, &late_resume_work);
+#ifdef CONFIG_SUSPEND
+		extern int pm_save_info(int reg_num, unsigned int bitfield, unsigned int step);
+		pm_save_info(5,0xF,0x1);
+#endif	
 	}
 	requested_suspend_state = new_state;
 	spin_unlock_irqrestore(&state_lock, irqflags);

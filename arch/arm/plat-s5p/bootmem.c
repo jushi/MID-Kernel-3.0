@@ -53,7 +53,7 @@ dma_addr_t s5p_get_media_memory_bank(int dev_id, int bank)
 
 	mdev = s5p_get_media_device(dev_id, bank);
 	if (!mdev) {
-		printk(KERN_ERR "invalid media device\n");
+		printk(KERN_ERR "invalid media device %d %d\n", dev_id, bank);
 		return 0;
 	}
 
@@ -72,7 +72,7 @@ size_t s5p_get_media_memsize_bank(int dev_id, int bank)
 
 	mdev = s5p_get_media_device(dev_id, bank);
 	if (!mdev) {
-		printk(KERN_ERR "invalid media device\n");
+		printk(KERN_ERR "invalid media device %d %d\n", dev_id, bank);
 		return 0;
 	}
 

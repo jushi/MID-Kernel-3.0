@@ -74,6 +74,15 @@
 #define S5PV210_ETC2_BASE		(S5P_VA_GPIO + 0x640)
 #define S5PV210_ETC4_BASE		(S5P_VA_GPIO + 0x660)
 
+#define S5PV210_MP01CON			(S5PV210_MP01_BASE + 0x00)
+#define S5PV210_MP01DAT			(S5PV210_MP01_BASE + 0x04)
+#define S5PV210_MP01PUD			(S5PV210_MP01_BASE + 0x08)
+#define S5PV210_MP01DRV			(S5PV210_MP01_BASE + 0x0c)
+#define S5PV210_MP01CONPDN		(S5PV210_MP01_BASE + 0x10)
+#define S5PV210_MP01PUDPDN		(S5PV210_MP01_BASE + 0x14)
+
+#define S5PV210_GPH1DRV			(S5PV210_GPH1_BASE + 0x0c)
+
 #define S5PV210_GPA0_INT_CON		(S5P_VA_GPIO + 0x700)
 #define S5PV210_GPA0_INT_FLTCON0		(S5P_VA_GPIO + 0x800)
 #define S5PV210_GPA0_INT_FLTCON1		(S5P_VA_GPIO + 0x804)
@@ -257,6 +266,13 @@
 #define eint_filt_reg(irq)		((eint_offset(irq)) >> 2)
 #define eint_mask_reg(irq)		((eint_offset(irq)) >> 3)
 #define eint_pend_reg(irq)		((eint_offset(irq)) >> 3)
+
+/* values for S5P_EXTINT0 */
+#define S5P_EXTINT_LOWLEV		(0x00)
+#define S5P_EXTINT_HILEV		(0x01)
+#define S5P_EXTINT_FALLEDGE		(0x02)
+#define S5P_EXTINT_RISEEDGE		(0x03)
+#define S5P_EXTINT_BOTHEDGE		(0x04)
 
 #define EINT_MODE		S3C_GPIO_SFN(0xf)
 

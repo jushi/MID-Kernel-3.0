@@ -152,6 +152,10 @@ void __init_or_cpufreq s3c_set_clksrc(struct clksrc_clk *clk, bool announce)
 
 	clk->clk.parent = srcs->sources[clksrc];
 
+	if (announce && ((clk->clk.rate) > 0))  {
+		clk_set_rate(&clk->clk, (clk->clk.rate));
+	}
+
 	if (announce)
 		printk(KERN_INFO "%s: source is %s (%d), rate is %ld\n",
 		       clk->clk.name, clk->clk.parent->name, clksrc,

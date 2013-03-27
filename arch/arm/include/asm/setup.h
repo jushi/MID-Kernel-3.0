@@ -86,6 +86,7 @@ struct tag_initrd {
 #define ATAG_SERIAL	0x54410006
 
 struct tag_serialnr {
+	char SN[32];
 	__u32 low;
 	__u32 high;
 };

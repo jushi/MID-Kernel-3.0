@@ -7,23 +7,45 @@
  * published by the Free Software Foundation.
 */
 
-#ifndef __ASM_ARM_TS_H
-#define __ASM_ARM_TS_H
+#ifndef __MACH_TS_SMDKC110_H
+#define __MACH_TS_SMDKC110_H
 
-struct s3c2410_ts_mach_info {
-       int             delay;
-       int             presc;
-       int             oversampling_shift;
-	   
-	   int		cal_x_max;
-	   int		cal_y_max;
-	   int		cal_param[7];
-	void    (*cfg_gpio)(struct platform_device *dev);
+#ifdef CONFIG_HAS_WAKELOCK
+#include <linux/wakelock.h>
+#include <linux/earlysuspend.h>
+#endif
+
+enum s3c_adc_type {
+	ADC_TYPE_0,
+	ADC_TYPE_1,	/* S3C2416, S3C2450 */
+	ADC_TYPE_2,	/* S3C64XX, S5PC1XX */
 };
 
-extern void s3c24xx_ts_set_platdata(struct s3c2410_ts_mach_info *);
+struct s3c_ts_mach_info {
+	int             	delay;
+	int             	presc;
+	int             	oversampling_shift;
+	int					resol_bit;
+	enum s3c_adc_type	s3c_adc_con;
+};
 
-/* defined by architecture to configure gpio */
-extern void s3c24xx_ts_cfg_gpio(struct platform_device *dev);
+struct s3c_ts_info {
+	struct input_dev 	*dev;
+	long 				xp;
+	long 				yp;
+	int 				count;
+	int 				shift;
+	char 				phys[32];
+	int					resol_bit;
+	int					xp_old; //yan
+	int					yp_old; //yan
+	enum s3c_adc_type	s3c_adc_con;
+
+#ifdef CONFIG_HAS_WAKELOCK
+	struct early_suspend early_suspend;
+#endif
+};
+
+extern void s3c_ts_set_platdata(struct s3c_ts_mach_info *);
 
 #endif /* __ASM_ARM_TS_H */

@@ -93,13 +93,17 @@ EXPORT_SYMBOL(rtc_time_to_tm);
  */
 int rtc_valid_tm(struct rtc_time *tm)
 {
-	if (tm->tm_year < 70
-		|| ((unsigned)tm->tm_mon) >= 12
-		|| tm->tm_mday < 1
-		|| tm->tm_mday > rtc_month_days(tm->tm_mon, tm->tm_year + 1900)
-		|| ((unsigned)tm->tm_hour) >= 24
-		|| ((unsigned)tm->tm_min) >= 60
-		|| ((unsigned)tm->tm_sec) >= 60)
+    if ((70 > tm->tm_year) || (136 < tm->tm_year)	||	
+        (0 > ((unsigned)tm->tm_mon)) || 
+        (11 < ((unsigned)tm->tm_mon)) ||	// range:0~11
+        (1 > tm->tm_mday) || 
+        (rtc_month_days(tm->tm_mon, tm->tm_year + 1900) < tm->tm_mday)	||	// range:1~31
+        (0 > ((unsigned)tm->tm_hour)) || 
+        (23 < ((unsigned)tm->tm_hour))	||	// range:0~23
+        (0 > ((unsigned)tm->tm_min))	|| 
+        (59 < ((unsigned)tm->tm_min))	||	// range:0~59
+        (0 > ((unsigned)tm->tm_sec))	|| 
+        (59 < ((unsigned)tm->tm_sec)))		// range:0~59
 		return -EINVAL;
 
 	return 0;

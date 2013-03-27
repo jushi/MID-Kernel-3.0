@@ -1001,6 +1001,7 @@ int s3c2410_dma_devconfig(enum dma_ch id, enum s3c2410_dmasrc source,
 		ch->rqcfg.src_inc = 0;
 		ch->rqcfg.dst_inc = 1;
 		break;
+
 	default:
 		ret = -EINVAL;
 		goto devcfg_exit;
@@ -1172,7 +1173,7 @@ probe_err1:
 static int pl330_remove(struct platform_device *pdev)
 {
 	struct s3c_pl330_dmac *dmac, *d;
-	struct s3c_pl330_chan *ch, *cht;
+	struct s3c_pl330_chan *ch;
 	unsigned long flags;
 	int del, found;
 
@@ -1196,7 +1197,7 @@ static int pl330_remove(struct platform_device *pdev)
 	dmac = d;
 
 	/* Remove all Channels that are managed only by this DMAC */
-	list_for_each_entry_safe(ch, cht, &chan_list, node) {
+	list_for_each_entry(ch, &chan_list, node) {
 
 		/* Only channels that are handled by this DMAC */
 		if (iface_of_dmac(dmac, ch->id))
@@ -1221,6 +1222,7 @@ static int pl330_remove(struct platform_device *pdev)
 	}
 
 	/* Disable operation clock */
+	clk_disable(dmac->clk);
 	clk_put(dmac->clk);
 
 	/* Remove the DMAC */

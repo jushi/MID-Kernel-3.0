@@ -121,7 +121,7 @@ static __u32 get_entry_msg_len(struct logger_log *log, size_t off)
 
 	entry = get_entry_header(log, off, &scratch);
 	return entry->len;
-	}
+}
 
 static size_t get_user_hdr_len(int ver)
 {

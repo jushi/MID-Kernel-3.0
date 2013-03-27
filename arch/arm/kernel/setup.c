@@ -94,6 +94,9 @@ EXPORT_SYMBOL(system_serial_low);
 unsigned int system_serial_high;
 EXPORT_SYMBOL(system_serial_high);
 
+char system_serial_no[32];
+EXPORT_SYMBOL(system_serial_no);
+
 unsigned int elf_hwcap __read_mostly;
 EXPORT_SYMBOL(elf_hwcap);
 
@@ -645,6 +648,9 @@ __tagtable(ATAG_RAMDISK, parse_tag_ramdisk);
 
 static int __init parse_tag_serialnr(const struct tag *tag)
 {
+	strlcpy(system_serial_no, tag->u.serialnr.SN, 32);
+	printk("parse_tag_serialnr /'%s/' \n",tag->u.serialnr.SN, system_serial_no);
+
 	system_serial_low = tag->u.serialnr.low;
 	system_serial_high = tag->u.serialnr.high;
 	return 0;

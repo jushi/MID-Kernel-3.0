@@ -39,95 +39,6 @@
 #include <plat/media.h>
 #include <plat/jpeg.h>
 #include <mach/media.h>
-#include <s3cfb.h>
-
-#if defined CONFIG_USB_S3C_OTG_HOST
-/* USB Device (OTG hcd)*/
-static struct resource s3c_usb_otghcd_resource[] = {
-       [0] = {
-               .start = S3C_PA_OTG,
-               .end   = S3C_PA_OTG + S3C_SZ_OTG - 1,
-               .flags = IORESOURCE_MEM,
-       },
-       [1] = {
-               .start = IRQ_OTG,
-               .end   = IRQ_OTG,
-               .flags = IORESOURCE_IRQ,
-       }
-};
-
-static u64 s3c_device_usb_otghcd_dmamask = 0xffffffffUL;
-
-struct platform_device s3c_device_usb_otghcd = {
-       .name           = "s3c_otghcd",
-       .id             = -1,
-       .num_resources  = ARRAY_SIZE(s3c_usb_otghcd_resource),
-       .resource       = s3c_usb_otghcd_resource,
-        .dev              = {
-                .dma_mask = &s3c_device_usb_otghcd_dmamask,
-                .coherent_dma_mask = 0xffffffffUL
-        }
-};
-
-EXPORT_SYMBOL(s3c_device_usb_otghcd);
-#endif
-
-#if defined CONFIG_USB_DWC_OTG
-/* USB Device (OTG hcd)*/
-static struct resource s3c_usb_dwcotg_resource[] = {
-	[0] = {
-		.start = S3C_PA_OTG,
-		.end   = S3C_PA_OTG + S3C_SZ_OTG - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start = IRQ_OTG,
-		.end   = IRQ_OTG,
-		.flags = IORESOURCE_IRQ,
-	}
-};
-
-static u64 s3c_device_usb_dwcotg_dmamask = 0xffffffffUL;
-
-struct platform_device s3c_device_usb_dwcotg = {
-	.name		= "dwc_otg",
-	.id		= -1,
-	.num_resources	= ARRAY_SIZE(s3c_usb_dwcotg_resource),
-	.resource	= s3c_usb_dwcotg_resource,
-        .dev              = {
-                .dma_mask = &s3c_device_usb_dwcotg_dmamask,
-                .coherent_dma_mask = 0xffffffffUL
-        }
-};
-
-EXPORT_SYMBOL(s3c_device_usb_dwcotg);
-#endif
-
-/* RTC */
-static struct resource s5p_rtc_resource[] = {
-	[0] = {
-		.start = S3C_PA_RTC,
-		.end   = S3C_PA_RTC + 0xff,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start = IRQ_RTC_ALARM,
-		.end   = IRQ_RTC_ALARM,
-		.flags = IORESOURCE_IRQ,
-	},
-	[2] = {
-		.start = IRQ_RTC_TIC,
-		.end   = IRQ_RTC_TIC,
-		.flags = IORESOURCE_IRQ
-	}
-};
-
-struct platform_device s5p_device_rtc = {
-	.name             = "s3c2410-rtc",
-	.id               = -1,
-	.num_resources    = ARRAY_SIZE(s5p_rtc_resource),
-	.resource         = s5p_rtc_resource,
-};
 
 #ifdef CONFIG_S5P_ADC
 /* ADCTS */
@@ -170,29 +81,7 @@ void __init s3c_adc_set_platdata(struct s3c_adc_mach_info *pd)
 }
 #endif /* CONFIG_S5P_ADC */
 
-#if defined(CONFIG_VIDEO_MFC51) || defined(CONFIG_VIDEO_MFC50)
-static struct resource s5p_mfc_resources[] = {
-	[0] = {
-		.start	= S5P_PA_MFC,
-		.end	= S5P_PA_MFC + S5P_SZ_MFC - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	[1] = {
-		.start	= IRQ_MFC,
-		.end	= IRQ_MFC,
-		.flags	= IORESOURCE_IRQ,
-	}
-};
-
-struct platform_device s5p_device_mfc = {
-	.name		= "mfc",
-	.id		= -1,
-	.num_resources	= ARRAY_SIZE(s5p_mfc_resources),
-	.resource	= s5p_mfc_resources,
-};
-#endif
-
-#if defined(CONFIG_VIDEO_FIMC) || defined(CONFIG_CPU_FREQ) /* TODO: use existing dev */
+#if defined(CONFIG_VIDEO_FIMC)
 static struct resource s3c_fimc0_resource[] = {
 	[0] = {
 		.start	= S5P_PA_FIMC0,
@@ -375,14 +264,61 @@ struct platform_device s3c_device_ipc = {
 	.num_resources	= ARRAY_SIZE(s3c_ipc_resource),
 	.resource	= s3c_ipc_resource,
 };
+
+static struct resource s3c_csis_resource[] = {
+	[0] = {
+		.start	= S5P_PA_CSIS,
+		.end	= S5P_PA_CSIS + S5P_SZ_CSIS - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.start	= IRQ_MIPI_CSIS,
+		.end	= IRQ_MIPI_CSIS,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device s3c_device_csis = {
+	.name		= "s5p-mipi-csis",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(s3c_csis_resource),
+	.resource	= s3c_csis_resource,
+};
+
+static struct s3c_platform_csis default_csis_data __initdata = {
+	.srclk_name	= "mout_mpll",
+	.clk_name	= "sclk_csis",
+	.clk_rate	= 166000000,
+};
+
+void __init s3c_csis_set_platdata(struct s3c_platform_csis *pd)
+{
+	struct s3c_platform_csis *npd;
+
+	if (!pd)
+		pd = &default_csis_data;
+
+	npd = kmemdup(pd, sizeof(struct s3c_platform_csis), GFP_KERNEL);
+	if (!npd) {
+		printk(KERN_ERR "%s: no memory for platform data\n", __func__);
+		return;
+	}
+
+	npd->cfg_gpio = s3c_csis_cfg_gpio;
+	npd->cfg_phy_global = s3c_csis_cfg_phy_global;
+	npd->clk_on = s3c_csis_clk_on;
+	npd->clk_off = s3c_csis_clk_off;
+
+	s3c_device_csis.dev.platform_data = npd;
+}
 #endif
 
 /* JPEG controller  */
 static struct s3c_platform_jpeg default_jpeg_data __initdata = {
-	.max_main_width		= 2560,
-	.max_main_height	= 1920,
-	.max_thumb_width	= 0,
-	.max_thumb_height	= 0,
+	.max_main_width			= 800,//2560,
+	.max_main_height		= 480,//1920,
+	.max_thumb_width		= 320,//0,
+	.max_thumb_height		= 240,//0,
 };
 
 void __init s3c_jpeg_set_platdata(struct s3c_platform_jpeg *pd)
@@ -418,39 +354,36 @@ struct platform_device s3c_device_jpeg = {
 	.num_resources    = ARRAY_SIZE(s3c_jpeg_resource),
 	.resource         = s3c_jpeg_resource,
 };
-
 /* G3D */
 struct platform_device s3c_device_g3d = {
 	.name		= "pvrsrvkm",
 	.id		= -1,
 };
-
 struct platform_device s3c_device_lcd = {
 	.name		= "s3c_lcd",
 	.id		= -1,
 };
-
-/* rotator interface */
-static struct resource s5p_rotator_resource[] = {
-	[0] = {
-		.start = S5P_PA_ROTATOR,
-		.end   = S5P_PA_ROTATOR + S5P_SZ_ROTATOR - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start = IRQ_ROTATOR,
-		.end   = IRQ_ROTATOR,
-		.flags = IORESOURCE_IRQ,
-	}
+/*
+static struct resource s3c_g2d_resources[] = {
+       [0] = {
+               .start  = S5P_PA_FIMG2D,
+               .end    = S5P_PA_FIMG2D + S5P_SZ_FIMG2D - 1,
+               .flags  = IORESOURCE_MEM,
+       },
+       [1] = {
+               .start  = IRQ_2D,
+               .end    = IRQ_2D,
+               .flags  = IORESOURCE_IRQ,
+       }
 };
 
-struct platform_device s5p_device_rotator = {
-	.name		= "s5p-rotator",
-	.id		= -1,
-	.num_resources	= ARRAY_SIZE(s5p_rotator_resource),
-	.resource	= s5p_rotator_resource
+struct platform_device s3c_device_g2d = {
+       .name           = "s3c-g2d",
+       .id             = -1,
+       .num_resources  = ARRAY_SIZE(s3c_g2d_resources),
+       .resource       = s3c_g2d_resources,
 };
-
+*/
 /* TVOUT interface */
 static struct resource s5p_tvout_resources[] = {
 	[0] = {
@@ -609,24 +542,4 @@ struct platform_device s3c_device_usbgadget = {
 	.resource	= s3c_usbgadget_resource,
 };
 #endif
-
-static struct resource s3c_g2d_resources[] = {
-	[0] = {
-		.start	= S5P_PA_FIMG2D,
-		.end	= S5P_PA_FIMG2D + S5P_SZ_FIMG2D - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	[1] = {
-		.start	= IRQ_2D,
-		.end	= IRQ_2D,
-		.flags	= IORESOURCE_IRQ,
-	}
-};
-
-struct platform_device s3c_device_g2d = {
-	.name		= "s3c-g2d",
-	.id		= -1,
-	.num_resources	= ARRAY_SIZE(s3c_g2d_resources),
-	.resource	= s3c_g2d_resources,
-};
 

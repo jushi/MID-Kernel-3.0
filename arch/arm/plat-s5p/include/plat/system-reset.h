@@ -12,6 +12,20 @@
  * published by the Free Software Foundation.
 */
 
+#include <plat/watchdog-reset.h>
+
 extern void (*s5p_reset_hook)(void);
 
-void arch_reset(char mode, const char *cmd);
+static void arch_reset(char mode, const char *cmd)
+{
+	/* SWRESET support in s5p_reset_hook() */
+
+	if (s5p_reset_hook)
+		s5p_reset_hook();
+
+	/* Perform reset using Watchdog reset
+	 * if there is no s5p_reset_hook()
+	 */
+
+	arch_wdt_reset();
+}

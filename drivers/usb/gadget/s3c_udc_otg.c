@@ -274,7 +274,7 @@ static void udc_reinit(struct s3c_udc *dev)
 /* until it's enabled, this UDC should be completely invisible
  * to any USB host.
  */
-extern void otg_host_phy_init(void);
+extern void otg_phy_init(void);
 
 static int udc_enable(struct s3c_udc *dev)
 {
@@ -282,7 +282,7 @@ static int udc_enable(struct s3c_udc *dev)
 
 	DEBUG_SETUP("%s: %p\n", __func__, dev);
 
-	otg_host_phy_init();
+	otg_phy_init();
 
 	spin_lock_irqsave(&dev->lock, flags);
 	reconfig_usbd();
@@ -635,8 +635,11 @@ static void set_max_pktsize(struct s3c_udc *dev, enum usb_device_speed speed)
 	}
 
 	dev->ep[0].ep.maxpacket = ep0_fifo_size;
-	for (i = 1; i < S3C_MAX_ENDPOINTS; i++)
-		dev->ep[i].ep.maxpacket = ep_fifo_size;
+	for (i = 1; i < S3C_MAX_ENDPOINTS; i++) {
+		/* fullspeed limitations don't apply to isochronous endpoints */
+		if (dev->ep[i].bmAttributes != USB_ENDPOINT_XFER_ISOC)
+			dev->ep[i].ep.maxpacket = ep_fifo_size;
+	}
 
 	/* EP0 - Control IN (64 bytes)*/
 	ep_ctrl = readl(S3C_UDC_OTG_DIEPCTL(EP0_CON));

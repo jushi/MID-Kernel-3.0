@@ -24,7 +24,7 @@
 static inline void samsung_keypad_setname(char *name)
 {
 #ifdef CONFIG_SAMSUNG_DEV_KEYPAD
-	samsung_device_keypad.name = name;
+	deviceKeypad.name = name;
 #endif
 }
 

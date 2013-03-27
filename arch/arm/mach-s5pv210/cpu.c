@@ -25,7 +25,6 @@
 #include <asm/mach/map.h>
 #include <asm/mach/irq.h>
 
-#include <asm/mach-types.h>
 #include <asm/proc-fns.h>
 #include <mach/map.h>
 #include <mach/regs-clock.h>
@@ -91,7 +90,22 @@ static struct map_desc s5pv210_iodesc[] __initdata = {
 		.pfn		= __phys_to_pfn(S5PV210_PA_DMC1),
 		.length		= SZ_4K,
 		.type		= MT_DEVICE,
-	}, {
+	},{
+                .virtual        = (unsigned long)S5P_VA_BUS_AXI_DSYS,
+                .pfn            = __phys_to_pfn(S5PV210_PA_BUS_AXI_DSYS),
+                .length         = SZ_4K,
+                .type           = MT_DEVICE,
+        }, {
+                .virtual        = (unsigned long)S5P_VA_BUS_AXI_VSYS,
+                .pfn            = __phys_to_pfn(S5PV210_PA_BUS_AXI_VSYS),
+                .length         = SZ_4K,
+                .type           = MT_DEVICE,
+        }, {
+                .virtual        = (unsigned long)S5P_VA_BUS_AXI_XSYS,
+                .pfn            = __phys_to_pfn(S5PV210_PA_BUS_AXI_XSYS),
+                .length         = SZ_4K,
+                .type           = MT_DEVICE,
+        }, {
 		.virtual	= (unsigned long)S3C_VA_USB_HSPHY,
 		.pfn		=__phys_to_pfn(S5PV210_PA_HSPHY),
 		.length		= SZ_4K,
@@ -122,6 +136,8 @@ static struct map_desc s5pv210_iodesc[] __initdata = {
 		.type		= MT_DEVICE,
 	},
 };
+
+void (*s5p_reset_hook)(void);
 
 static void s5pv210_idle(void)
 {
@@ -167,8 +183,7 @@ void __init s5pv210_map_io(void)
 //	s3c_fb_setname("s5pv210-fb");
 
 	/* Use s5pv210-keypad instead of samsung-keypad */
-    /* hcj: we should not do so */
-	/*samsung_keypad_setname("s5pv210-keypad");*/
+	samsung_keypad_setname("s3c-keypad");
 }
 
 void __init s5pv210_init_clocks(int xtal)

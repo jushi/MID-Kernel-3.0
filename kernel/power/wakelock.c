@@ -559,6 +559,44 @@ static const struct file_operations wakelock_stats_fops = {
 	.release = single_release,
 };
 
+static int has_wake_lock_internal(const char *name)
+{
+	int ret = 0;
+	unsigned long irqflags;
+	struct wake_lock *lock, *n;
+
+	spin_lock_irqsave(&list_lock, irqflags);
+	list_for_each_entry_safe(lock, n, &active_wake_locks[WAKE_LOCK_SUSPEND], link) {
+		if (lock->flags & WAKE_LOCK_AUTO_EXPIRE) {
+			long timeout = lock->expires - jiffies;
+			if (timeout > 0) {
+				if (strcmp(lock->name, name) == 0) {
+					ret = 1;
+					spin_unlock_irqrestore(&list_lock, irqflags);
+					return ret;
+				}
+			}
+		} else {
+			if (strcmp(lock->name, name) == 0) {
+				ret = 1;
+				spin_unlock_irqrestore(&list_lock, irqflags);
+				return ret;
+			}
+		}
+	}
+	spin_unlock_irqrestore(&list_lock, irqflags);
+	return ret;
+}
+
+int has_audio_wake_lock(void)
+{
+	if (has_wake_lock_internal("AudioOutLock") &&
+	    !has_wake_lock_internal("vbus_present"))
+		return 1;
+	return 0;
+}
+EXPORT_SYMBOL(has_audio_wake_lock);
+
 static int __init wakelocks_init(void)
 {
 	int ret;

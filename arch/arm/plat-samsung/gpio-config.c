@@ -132,6 +132,10 @@ EXPORT_SYMBOL(s3c_gpio_getpull);
 
 int s3c_gpio_setpin(unsigned int pin, s3c_gpio_pull_t level)
 {
+#if 1
+	gpio_set_value(pin,level);
+	return 0;
+#else
         struct s3c_gpio_chip *chip = s3c_gpiolib_getchip(pin);
         unsigned long flags;
         int offset, ret;
@@ -145,8 +149,9 @@ int s3c_gpio_setpin(unsigned int pin, s3c_gpio_pull_t level)
         //ret = s3c_gpio_do_setpin(chip, offset, level);
        	ret = (chip->config->set_pin)(chip, offset, level);
 	 local_irq_restore(flags);
+	         return ret;
+#endif
 
-        return ret;
 }
 
 EXPORT_SYMBOL(s3c_gpio_setpin);

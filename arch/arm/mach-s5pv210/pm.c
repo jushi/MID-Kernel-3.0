@@ -27,8 +27,9 @@
 #include <mach/regs-clock.h>
 #include <mach/regs-mem.h>
 #include <mach/power-domain.h>
+#include <mach/regs-gpio.h>
 
-static struct sleep_save core_save[] = {
+static struct sleep_save s5pv210_core_save[] = {
 	/* PLL Control */
 	SAVE_ITEM(S5P_APLL_CON),
 	SAVE_ITEM(S5P_MPLL_CON),
@@ -80,7 +81,7 @@ static struct sleep_save core_save[] = {
 
 	/* Clock Blcok and Bus gate */
 	SAVE_ITEM(S5P_CLKGATE_BLOCK),
-	SAVE_ITEM(S5P_CLKGATE_IP5),
+	SAVE_ITEM(S5P_CLKGATE_BUS0),
 
 	/* Clock ETC */
 	SAVE_ITEM(S5P_CLK_OUT),
@@ -123,6 +124,10 @@ static void s5pv210_pm_prepare(void)
 	/* ensure at least INFORM0 has the resume address */
 	__raw_writel(virt_to_phys(s3c_cpu_resume), S5P_INFORM0);
 
+	tmp = __raw_readl(S5P_SLEEP_CFG);
+	tmp &= ~(S5P_SLEEP_CFG_OSC_EN | S5P_SLEEP_CFG_USBOSC_EN);
+	__raw_writel(tmp, S5P_SLEEP_CFG);
+
 	/* WFI for SLEEP mode configuration by SYSCON */
 	tmp = __raw_readl(S5P_PWR_CFG);
 	tmp &= S5P_CFG_WFI_CLEAN;
@@ -139,7 +144,27 @@ static void s5pv210_pm_prepare(void)
 	__raw_writel(0xffffffff, (VA_VIC2 + VIC_INT_ENABLE_CLEAR));
 	__raw_writel(0xffffffff, (VA_VIC3 + VIC_INT_ENABLE_CLEAR));
 
-	s3c_pm_do_save(core_save, ARRAY_SIZE(core_save));
+#if 0
+	tmp = __raw_readl(S5P_EINT_CON(0));
+	tmp &= ~(7<<16);
+	tmp |= (2<<16);
+	__raw_writel(tmp,S5P_EINT_CON(0));
+	
+	tmp = __raw_readl(S5PV210_GPH0_BASE + 0x8);
+	tmp &= ~(3 << 8);
+	tmp |= (2 << 8);
+	__raw_writel(tmp,(S5PV210_GPH0_BASE + 0x8));
+
+	tmp = __raw_readl(S5PV210_GPH0_BASE);
+	tmp |= 0xF0000;
+	__raw_writel(tmp,S5PV210_GPH0_BASE);
+#endif
+
+	tmp = __raw_readl(S5P_WAKEUP_MASK);
+	tmp &= ~(1 << 1 );
+	__raw_writel(tmp,S5P_WAKEUP_MASK);
+
+	s3c_pm_do_save(s5pv210_core_save, ARRAY_SIZE(s5pv210_core_save));
 }
 
 static int s5pv210_pm_add(struct sys_device *sysdev)
@@ -184,7 +209,7 @@ static void s5pv210_pm_resume(void)
 		__raw_writel(tmp , S5P_NORMAL_CFG);
 	}
 
-	s3c_pm_do_restore_core(core_save, ARRAY_SIZE(core_save));
+	s3c_pm_do_restore_core(s5pv210_core_save, ARRAY_SIZE(s5pv210_core_save));
 }
 
 static struct syscore_ops s5pv210_pm_syscore_ops = {
@@ -193,6 +218,14 @@ static struct syscore_ops s5pv210_pm_syscore_ops = {
 
 static __init int s5pv210_pm_syscore_init(void)
 {
+	unsigned int reg;
+	reg = __raw_readl(S5P_INFORM4);
+	printk("S5P_INFORM4 :%x\n",reg);
+	reg = __raw_readl(S5P_INFORM5);
+	printk("S5P_INFORM5 :%x\n",reg);
+	reg = __raw_readl(S5P_INFORM6);
+	printk("S5P_INFORM6 :%x\n",reg);
+	
 	register_syscore_ops(&s5pv210_pm_syscore_ops);
 	return 0;
 }

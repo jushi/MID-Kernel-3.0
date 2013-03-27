@@ -853,16 +853,16 @@ static int iface_stat_fmt_proc_read(char *page, char **num_items_returned,
 		if (fmt == 1) {
 			len = snprintf(
 				outp, char_count,
-			       "%s %d "
-			       "%llu %llu %llu %llu "
-			       "%llu %llu %llu %llu\n",
-			       iface_entry->ifname,
-			       iface_entry->active,
+				"%s %d "
+				"%llu %llu %llu %llu "
+				"%llu %llu %llu %llu\n",
+				iface_entry->ifname,
+				iface_entry->active,
 				iface_entry->totals_via_dev[IFS_RX].bytes,
 				iface_entry->totals_via_dev[IFS_RX].packets,
 				iface_entry->totals_via_dev[IFS_TX].bytes,
 				iface_entry->totals_via_dev[IFS_TX].packets,
-			       stats->rx_bytes, stats->rx_packets,
+				stats->rx_bytes, stats->rx_packets,
 				stats->tx_bytes, stats->tx_packets
 				);
 		} else {
@@ -1950,7 +1950,7 @@ static int qtaguid_ctrl_proc_read(char *page, char **num_items_returned,
 	CT_DEBUG("qtaguid: proc ctrl pid=%u tgid=%u uid=%u "
 		 "page=%p off=%ld char_count=%d *eof=%d\n",
 		 current->pid, current->tgid, current_fsuid(),
-		page, items_to_skip, char_count, *eof);
+		 page, items_to_skip, char_count, *eof);
 
 	spin_lock_bh(&sock_tag_list_lock);
 	for (node = rb_first(&sock_tag_tree);
@@ -2588,8 +2588,9 @@ static int pp_stats_line(struct proc_print_info *ppi, int cnt_set)
 	} else {
 		tag_t tag = ppi->ts_entry->tn.tag;
 		uid_t stat_uid = get_uid_from_tag(tag);
-
-		if (!can_read_other_uid_stats(stat_uid)) {
+		/* Detailed tags are not available to everybody */
+		if (get_atag_from_tag(tag)
+		    && !can_read_other_uid_stats(stat_uid)) {
 			CT_DEBUG("qtaguid: stats line: "
 				 "%s 0x%llx %u: insufficient priv "
 				 "from pid=%u tgid=%u uid=%u\n",
@@ -2689,7 +2690,7 @@ static int qtaguid_stats_proc_read(char *page, char **num_items_returned,
 		 "char_count=%d *eof=%d\n",
 		 current->pid, current->tgid, current_fsuid(),
 		 page, *num_items_returned,
-		items_to_skip, char_count, *eof);
+		 items_to_skip, char_count, *eof);
 
 	if (*eof)
 		return 0;

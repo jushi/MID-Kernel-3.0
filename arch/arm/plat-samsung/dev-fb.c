@@ -26,6 +26,7 @@
 #include <plat/cpu.h>
 #include <../../../drivers/video/samsung/s3cfb.h>
 #include <mach/media.h>
+/*
 #if 0
 static struct resource s3c_fb_resource[] = {
 	[0] = {
@@ -74,38 +75,8 @@ void __init s3c_fb_set_platdata(struct s3c_fb_platdata *pd)
 
 	s3c_device_fb.dev.platform_data = npd;
 }
-
-static struct resource s3cfb_resource[] = {
-        [0] = {
-                .start = S5P_PA_LCD,
-                .end   = S5P_PA_LCD + S5P_SZ_LCD - 1,
-                .flags = IORESOURCE_MEM,
-        },
-        [1] = {
-                .start = IRQ_LCD1,
-                .end   = IRQ_LCD1,
-                .flags = IORESOURCE_IRQ,
-        },
-        [2] = {
-                .start = IRQ_LCD0,
-                .end   = IRQ_LCD0,
-                .flags = IORESOURCE_IRQ,
-        },
-};
-
-static u64 fb_dma_mask = 0xffffffffUL;
-
-struct platform_device s3c_device_fb = {
-        .name             = "s3cfb",
-        .id               = -1,
-        .num_resources    = ARRAY_SIZE(s3cfb_resource),
-        .resource         = s3cfb_resource,
-        .dev              = {
-                .dma_mask               = &fb_dma_mask,
-                .coherent_dma_mask      = 0xffffffffUL
-        }
-};
 #endif
+*/
 static struct resource s3cfb_resource[] = {
         [0] = {
                 .start = S5P_PA_LCD,
@@ -178,11 +149,16 @@ void __init s3c_fb_set_platdata(struct s3c_platform_fb *pd)
 
                 lcd = (struct s3cfb_lcd *)npd->lcd;
                 frame_size = (lcd->width * lcd->height * 4);
-                frame_size = ALIGN(frame_size, PAGE_SIZE); /* namko: Page-align for odd resoulutions */
 
                 s3cfb_get_clk_name(npd->clk_name);
                 npd->clk_on = s3cfb_clk_on;
                 npd->clk_off = s3cfb_clk_off;
+
+                npd->cfg_gpio        = s3cfb_cfg_gpio;
+                npd->backlight_on    = s3cfb_backlight_on;
+                npd->backlight_onoff = s3cfb_backlight_onoff;
+                npd->lcd_on          = s3cfb_lcd_on;
+                npd->lcd_off         = s3cfb_lcd_off;
 
                 /* set starting physical address & size of memory region for overlay
                  * window */

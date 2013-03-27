@@ -46,7 +46,6 @@ struct sdhci_s3c {
 	struct resource		*ioarea;
 	struct s3c_sdhci_platdata *pdata;
 	unsigned int		cur_clk;
-	bool			cur_clk_set;
 	int			ext_cd_irq;
 	int			ext_cd_gpio;
 
@@ -113,46 +112,6 @@ static unsigned int sdhci_s3c_get_max_clk(struct sdhci_host *host)
 	}
 
 	return max;
-}
-
-static void sdhci_s3c_set_ios(struct sdhci_host *host,
-			      struct mmc_ios *ios)
-{
-	struct sdhci_s3c *ourhost = to_s3c(host);
-	struct s3c_sdhci_platdata *pdata = ourhost->pdata;
-	int width;
-	u8 tmp;
-
-	sdhci_s3c_check_sclk(host);
-
-	if (ios->power_mode != MMC_POWER_OFF) {
-		switch (ios->bus_width) {
-		case MMC_BUS_WIDTH_8:
-			width = 8;
-			tmp = readb(host->ioaddr + SDHCI_HOST_CONTROL);
-			writeb(tmp | SDHCI_S3C_CTRL_8BITBUS,
-				host->ioaddr + SDHCI_HOST_CONTROL);
-			break;
-		case MMC_BUS_WIDTH_4:
-			width = 4;
-			break;
-		case MMC_BUS_WIDTH_1:
-			width = 1;
-			break;
-		default:
-			BUG();
-		}
-
-		if (pdata->cfg_gpio)
-			pdata->cfg_gpio(ourhost->pdev, width);
-	}
-
-	if (pdata->cfg_card) {
-		pdata->cfg_card(ourhost->pdev, host->ioaddr,
-				ios, host->mmc->card);
-		pdata->rx_cfg = 0;
-		pdata->tx_cfg = 0;
-	}
 }
 
 /**
@@ -229,14 +188,13 @@ static void sdhci_s3c_set_clock(struct sdhci_host *host, unsigned int clock)
 
 	/* select the new clock source */
 
-	if (ourhost->cur_clk != best_src || !ourhost->cur_clk_set) {
+	if (ourhost->cur_clk != best_src) {
 		struct clk *clk = ourhost->clk_bus[best_src];
 
 		/* turn clock off to card before changing clock source */
 		writew(0, host->ioaddr + SDHCI_CLOCK_CONTROL);
 
 		ourhost->cur_clk = best_src;
-		ourhost->cur_clk_set = true;
 		host->max_clk = clk_get_rate(clk);
 
 		ctrl = readl(host->ioaddr + S3C_SDHCI_CONTROL2);
@@ -244,15 +202,18 @@ static void sdhci_s3c_set_clock(struct sdhci_host *host, unsigned int clock)
 		ctrl |= best_src << S3C_SDHCI_CTRL2_SELBASECLK_SHIFT;
 		writel(ctrl, host->ioaddr + S3C_SDHCI_CONTROL2);
 	}
-}
 
-static void sdhci_s3c_adjust_cfg(struct sdhci_host *host, int rw)
-{
-	struct sdhci_s3c *ourhost = to_s3c(host);
-	struct s3c_sdhci_platdata *pdata = ourhost->pdata;
+	/* reconfigure the hardware for new clock rate */
 
-	if(pdata->adjust_cfg_card)
-		pdata->adjust_cfg_card(pdata, host->ioaddr, rw);
+	{
+		struct mmc_ios ios;
+
+		ios.clock = clock;
+
+		if (ourhost->pdata->cfg_card)
+			(ourhost->pdata->cfg_card)(ourhost->pdev, host->ioaddr,
+						   &ios, NULL);
+	}
 }
 
 /**
@@ -356,8 +317,6 @@ static struct sdhci_ops sdhci_s3c_ops = {
 	.set_clock		= sdhci_s3c_set_clock,
 	.get_min_clock		= sdhci_s3c_get_min_clock,
 	.platform_8bit_width	= sdhci_s3c_platform_8bit_width,
-	.set_ios		= sdhci_s3c_set_ios,
-	.adjust_cfg		= sdhci_s3c_adjust_cfg,
 };
 
 static void sdhci_s3c_notify_change(struct platform_device *dev, int state)
@@ -529,9 +488,6 @@ static int __devinit sdhci_s3c_probe(struct platform_device *pdev)
 	/* Setup quirks for the controller */
 	host->quirks |= SDHCI_QUIRK_NO_ENDATTR_IN_NOPDESC;
 	host->quirks |= SDHCI_QUIRK_NO_HISPD_BIT;
-	host->quirks |= SDHCI_QUIRK_BROKEN_TIMEOUT_VAL;
-	if (pdata->must_maintain_clock)
-		host->quirks |= SDHCI_QUIRK_MUST_MAINTAIN_CLOCK;
 
 #ifndef CONFIG_MMC_SDHCI_S3C_DMA
 
@@ -539,18 +495,12 @@ static int __devinit sdhci_s3c_probe(struct platform_device *pdev)
 	 * support as well. */
 	host->quirks |= SDHCI_QUIRK_BROKEN_DMA;
 
-	/* PIO currently has problems with multi-block IO */
-	host->quirks |= SDHCI_QUIRK_NO_MULTIBLOCK;
-
 #endif /* CONFIG_MMC_SDHCI_S3C_DMA */
 
 	/* It seems we do not get an DATA transfer complete on non-busy
 	 * transfers, not sure if this is a problem with this specific
 	 * SDHCI block, or a missing configuration that needs to be set. */
 	host->quirks |= SDHCI_QUIRK_NO_BUSY_IRQ;
-
-	/* This host supports the Auto CMD12 */
-	host->quirks |= SDHCI_QUIRK_MULTIBLOCK_READ_ACMD12;
 
 	if (pdata->cd_type == S3C_SDHCI_CD_NONE ||
 	    pdata->cd_type == S3C_SDHCI_CD_PERMANENT)
@@ -582,11 +532,6 @@ static int __devinit sdhci_s3c_probe(struct platform_device *pdev)
 	if (pdata->host_caps)
 		host->mmc->caps |= pdata->host_caps;
 
-	/* Set pm_flags for built_in device */
-	host->mmc->pm_caps = MMC_PM_KEEP_POWER | MMC_PM_IGNORE_PM_NOTIFY;
-	if (pdata->built_in)
-		host->mmc->pm_flags = MMC_PM_KEEP_POWER | MMC_PM_IGNORE_PM_NOTIFY;
-
 	ret = sdhci_add_host(host);
 	if (ret) {
 		dev_err(dev, "sdhci_add_host() failed\n");
@@ -610,10 +555,8 @@ static int __devinit sdhci_s3c_probe(struct platform_device *pdev)
 
  err_req_regs:
 	for (ptr = 0; ptr < MAX_BUS_CLK; ptr++) {
-		if (sc->clk_bus[ptr]) {
-			clk_disable(sc->clk_bus[ptr]);
-			clk_put(sc->clk_bus[ptr]);
-		}
+		clk_disable(sc->clk_bus[ptr]);
+		clk_put(sc->clk_bus[ptr]);
 	}
 
  err_no_busclks:
@@ -631,15 +574,10 @@ static int __devexit sdhci_s3c_remove(struct platform_device *pdev)
 	struct s3c_sdhci_platdata *pdata = pdev->dev.platform_data;
 	struct sdhci_host *host =  platform_get_drvdata(pdev);
 	struct sdhci_s3c *sc = sdhci_priv(host);
-	int ptr, dead = 0;
-	u32 scratch;
+	int ptr;
 
 	if (pdata->cd_type == S3C_SDHCI_CD_EXTERNAL && pdata->ext_cd_cleanup)
 		pdata->ext_cd_cleanup(&sdhci_s3c_notify_change);
-
-	scratch = readl(host->ioaddr + SDHCI_INT_STATUS);
-	if (scratch == (u32)-1)
-		dead = 1;
 
 	if (sc->ext_cd_irq)
 		free_irq(sc->ext_cd_irq, sc);
@@ -673,32 +611,20 @@ static int __devexit sdhci_s3c_remove(struct platform_device *pdev)
 static int sdhci_s3c_suspend(struct platform_device *dev, pm_message_t pm)
 {
 	struct sdhci_host *host = platform_get_drvdata(dev);
+	int ret = 0;
 
-	struct mmc_host *mmc = host->mmc;
+	ret = sdhci_suspend_host(host, pm);
 
-	if (mmc->card && (mmc->card->type == MMC_TYPE_SDIO))
-		mmc->pm_flags |= MMC_PM_KEEP_POWER;
-
-	sdhci_suspend_host(host, pm);
-	return 0;
+	return ret;
 }
 
 static int sdhci_s3c_resume(struct platform_device *dev)
 {
 	struct sdhci_host *host = platform_get_drvdata(dev);
-	struct s3c_sdhci_platdata *pdata = dev->dev.platform_data;
-	u32 ier;
+	int ret = 0;
 
-	sdhci_resume_host(host);
-
-	if (pdata->enable_intr_on_resume) {
-		ier = sdhci_readl(host, SDHCI_INT_ENABLE);
-		ier |= SDHCI_INT_CARD_INT;
-		sdhci_writel(host, ier, SDHCI_INT_ENABLE);
-		sdhci_writel(host, ier, SDHCI_SIGNAL_ENABLE);
-	}
-
-	return 0;
+	ret = sdhci_resume_host(host);
+	return ret;
 }
 
 #else

@@ -13,11 +13,7 @@
 #ifndef __ASM_ARCH_MEMORY_H
 #define __ASM_ARCH_MEMORY_H
 
-#if defined(CONFIG_MACH_SMDKV210) || defined(CONFIG_MACH_MID)
 #define PLAT_PHYS_OFFSET		UL(0x20000000)
-#else
-#define PLAT_PHYS_OFFSET		UL(0x30000000)
-#endif
 
 #define CONSISTENT_DMA_SIZE	(SZ_8M + SZ_4M + SZ_2M)
 

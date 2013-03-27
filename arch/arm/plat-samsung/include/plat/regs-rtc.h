@@ -23,6 +23,7 @@
 #define S3C2410_RTCCON_CLKSEL (1<<1)
 #define S3C2410_RTCCON_CNTSEL (1<<2)
 #define S3C2410_RTCCON_CLKRST (1<<3)
+#define S3C2410_RTCCON_CLKEN  (1<<9)	/* write-only */
 #define S3C64XX_RTCCON_TICEN  (1<<8)
 
 #define S3C64XX_RTCCON_TICMSK (0xF<<7)

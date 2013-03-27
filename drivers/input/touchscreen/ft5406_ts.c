@@ -87,20 +87,12 @@ enum ft5x0x_ts_regs
 #define PMODE_STANDBY           0x02
 #define PMODE_HIBERNATE         0x03
 
-#ifdef CONFIG_TOUCHSCREEN_FT5406_GB
-    // GINGERBREAD COMPATIBILITY
-    #define TS_POSITION_X           ABS_MT_POSITION_X
-    #define TS_POSITION_Y           ABS_MT_POSITION_Y
-    #define TS_PRESSURE             ABS_MT_TOUCH_MAJOR
-    #define TS_TOUCH_SIZE           ABS_MT_WIDTH_MAJOR
-#else
-    // ICS COMPATIBILITY
-    #define TS_POSITION_X           ABS_MT_POSITION_X
-    #define TS_POSITION_Y           ABS_MT_POSITION_Y
-    #define TS_PRESSURE             ABS_MT_PRESSURE
-    #define TS_TOUCH_SIZE           ABS_MT_TOUCH_MAJOR
-    #define TS_TOUCH_BTN            BTN_TOUCH
-#endif
+#define TS_POSITION_X           ABS_MT_POSITION_X
+#define TS_POSITION_Y           ABS_MT_POSITION_Y
+#define TS_PRESSURE             ABS_MT_PRESSURE
+#define TS_TOUCH_SIZE           ABS_MT_TOUCH_MAJOR
+#define TS_TOUCH_BTN            BTN_TOUCH
+
 
 /***********************************************************************************************
 some forward declarations: driver callbacks
@@ -268,13 +260,8 @@ static void ft5406_ts_release(void)
 {
     struct ft5406_ts_data *data = i2c_get_clientdata(this_client);
 
-#ifdef CONFIG_TOUCHSCREEN_FT5406_GB
-    input_report_abs(data->input_dev, TS_PRESSURE, 0);
-#else
     input_mt_sync(data->input_dev);
     input_report_key(data->input_dev, TS_TOUCH_BTN, 0);
-#endif
-
     input_sync(data->input_dev);
 }
 
@@ -425,10 +412,8 @@ static void ft5406_report_value(void)
             input_report_abs(data->input_dev, TS_TOUCH_SIZE, 1);
             input_mt_sync(data->input_dev);
             dev_dbg(&this_client->dev, "===x1 = %d,y1 = %d ====\n",event->x1,event->y1);
-
-#ifndef CONFIG_TOUCHSCREEN_FT5406_GB
             input_report_key(data->input_dev, TS_TOUCH_BTN, 1);
-#endif
+
 
         default:
             break;
@@ -610,10 +595,8 @@ static int ft5406_ts_probe(struct i2c_client *client, const struct i2c_device_id
     ft5406_ts->input_dev = input_dev;
     input_dev->name = FT5406_NAME;
 
-#ifndef CONFIG_TOUCHSCREEN_FT5406_GB
-    set_bit(TS_TOUCH_BTN, input_dev->keybit);
-#endif
 
+    set_bit(TS_TOUCH_BTN, input_dev->keybit);
     set_bit(TS_PRESSURE, input_dev->absbit);
     set_bit(TS_POSITION_X, input_dev->absbit);
     set_bit(TS_POSITION_Y, input_dev->absbit);

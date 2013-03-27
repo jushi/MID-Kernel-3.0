@@ -64,9 +64,9 @@ extern struct platform_device s3c_device_fimc0;
 extern struct platform_device s3c_device_fimc1;
 extern struct platform_device s3c_device_fimc2;
 extern struct platform_device s3c_device_ipc;
+extern struct platform_device s3c_device_csis;
 extern struct platform_device s3c_device_mfc;
 extern struct platform_device s3c_device_jpeg;
-extern struct platform_device s3c_device_g2d;
 extern struct platform_device s3c_device_g3d;
 
 extern struct platform_device s3c_device_ohci;
@@ -121,9 +121,11 @@ extern struct platform_device s3c_device_usb_otghcd;
 #if defined CONFIG_USB_DWC_OTG
 extern struct platform_device s3c_device_usb_dwcotg;
 #endif
-extern struct platform_device s5p_device_rotator;
-extern struct platform_device s5p_device_tvout;
 extern struct platform_device s5p_device_g3d;
+extern struct platform_device s3c_device_g2d;
+extern struct platform_device s5p_device_tvout;
+extern struct platform_device s5p_device_cec;
+extern struct platform_device s5p_device_hpd;
 
 extern struct platform_device s5pv210_device_ac97;
 extern struct platform_device s5pv210_device_pcm0;
@@ -161,7 +163,7 @@ extern struct platform_device s5pc100_device_iis1;
 extern struct platform_device s5pc100_device_iis2;
 extern struct platform_device s5pc100_device_spdif;
 
-extern struct platform_device samsung_device_keypad;
+extern struct platform_device deviceKeypad;
 
 extern struct platform_device s5p_device_fimc0;
 extern struct platform_device s5p_device_fimc1;
@@ -172,13 +174,12 @@ extern struct platform_device s5p_device_mipi_csis0;
 extern struct platform_device s5p_device_mipi_csis1;
 
 extern struct platform_device s5p_device_ehci;
+extern struct platform_device s5p_device_ohci;
 
 extern struct platform_device exynos4_device_sysmmu;
-extern struct platform_device s5p_device_rtc;
 
 extern struct platform_device s3c_device_usb_ehci;
 extern struct platform_device s3c_device_usb_ohci;
-
 extern struct platform_device s3c_device_adc;
 /* s3c2440 specific devices */
 

@@ -41,10 +41,11 @@ struct s3c_platform_fb {
 	int		(*reset_lcd)(struct platform_device *dev);
 	int		(*clk_on)(struct platform_device *pdev, struct clk **s3cfb_clk);
 	int		(*clk_off)(struct platform_device *pdev, struct clk **clk);
+	int		(*lcd_on)(struct platform_device *dev);
+	int		(*lcd_off)(struct platform_device *dev);
 };
 
 extern void s3c_fb_set_platdata(struct s3c_platform_fb *fimd);
-//extern void s3c_fb_set_platdata(struct s3c_fb_platdata *pd);
 
 /* defined by architecture to configure gpio */
 extern void s3cfb_cfg_gpio(struct platform_device *pdev);
@@ -54,6 +55,8 @@ extern int s3cfb_reset_lcd(struct platform_device *pdev);
 extern int s3cfb_clk_on(struct platform_device *pdev, struct clk **s3cfb_clk);
 extern int s3cfb_clk_off(struct platform_device *pdev, struct clk **clk);
 extern void s3cfb_get_clk_name(char *clk_name);
+extern int s3cfb_lcd_on(struct platform_device *pdev);
+extern int s3cfb_lcd_off(struct platform_device *pdev);
 
 #else
 

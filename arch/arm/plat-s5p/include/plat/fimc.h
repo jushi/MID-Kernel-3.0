@@ -94,6 +94,7 @@ struct s3c_platform_camera {
 
 	/* Board specific power pin control */
 	int				(*cam_power)(int onoff);
+	int 				v4l2_ident;
 };
 
 /* For camera interface driver */

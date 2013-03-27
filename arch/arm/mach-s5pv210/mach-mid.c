@@ -8,11 +8,19 @@
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/i2c.h>
+#include <linux/i2c-gpio.h>
+#include <linux/regulator/consumer.h>
+#include <linux/mfd/max8998.h>
+
+#include <mach/power-domain.h>
 #include <linux/init.h>
 #include <linux/serial_core.h>
 #include <linux/sysdev.h>
+#include <linux/dm9000.h>
 #include <linux/fb.h>
 #include <linux/gpio.h>
+#include <linux/gpio_event.h>
+#include <linux/videodev2.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/pwm_backlight.h>
@@ -20,22 +28,22 @@
 #include <linux/gpio_keys.h>
 #include <linux/console.h>
 #include <linux/mtd/partitions.h>
+#include <linux/mmc/host.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 #include <asm/setup.h>
 #include <asm/mach-types.h>
 
+#include <video/platform_lcd.h>
+
 #include <mach/map.h>
 #include <mach/regs-clock.h>
 #include <mach/regs-fb.h>
 #include <mach/adc.h>
-#include <mach/ts-s3c.h>
-#include <mach/regs-gpio.h>
-#include <mach/gpio.h>
-#include <mach/gpio-smdkc110.h>
-#include <mach/gpio-mid.h>
-#include <mach/mid-cfg.h>
+
+#include <media/midcam_platform.h>
+#include <mtd/mtd-abi.h>
 
 #include <plat/regs-serial.h>
 #include <plat/regs-srom.h>
@@ -44,44 +52,32 @@
 #include <plat/devs.h>
 #include <plat/cpu.h>
 #include <plat/ts.h>
-#include <plat/ata.h>
 #include <plat/iic.h>
 #include <plat/pm.h>
 #include <plat/fb.h>
+#include <plat/mfc.h>
 #include <plat/s5p-time.h>
 #include <plat/sdhci.h>
 #include <plat/fimc.h>
+#include <plat/csis.h>
 #include <plat/jpeg.h>
-#include <plat/mfc.h>
 #include <plat/clock.h>
 #include <plat/regs-otg.h>
+#include <plat/otg.h>
 #include <plat/nand.h>
 #include <plat/ehci.h>
+#include <plat/ohci.h>
 #include <plat/usb-phy.h>
-
 #include <../../../drivers/video/samsung/s3cfb.h>
-#include <media/midcam_platform.h>
-#include <mtd/mtd-abi.h>
-#include <video/platform_lcd.h>
 
-#ifdef CONFIG_MFD_MAX8998_URBETTER
-#include <linux/regulator/consumer.h>
-#include <linux/mfd/max8998-urbetter.h>
-#endif
+#include <mach/regs-gpio.h>
+#include <mach/gpio.h>
+#include <mach/gpio-mid.h>
+#include <mach/mid-cfg.h>
 
-#ifdef CONFIG_DM9000
-#include <linux/dm9000.h>
-#endif
-
-#ifdef CONFIG_ANDROID_PMEM
-#include <linux/android_pmem.h>
-#endif
 #include <plat/media.h>
 #include <mach/media.h>
-
-#ifdef CONFIG_S5PV210_POWER_DOMAIN
-#include <mach/power-domain.h>
-#endif
+#include <mach/gpio-smdkc110.h>
 
 /* Following are default values for UCON, ULCON and UFCON UART registers */
 #define SMDKV210_UCON_DEFAULT	(S3C2410_UCON_TXILEVEL |	\
@@ -128,198 +124,8 @@ static struct s3c2410_uartcfg mid_uartcfgs[] __initdata = {
 	},
 };
 
-#ifdef CONFIG_DM9000
-static struct resource mid_dm9000_resources[] = {
-	[0] = {
-		.start	= S5PV210_PA_SROM_BANK5,
-		.end	= S5PV210_PA_SROM_BANK5,
-		.flags	= IORESOURCE_MEM,
-	},
-	[1] = {
-		.start	= S5PV210_PA_SROM_BANK5 + 2,
-		.end	= S5PV210_PA_SROM_BANK5 + 2,
-		.flags	= IORESOURCE_MEM,
-	},
-	[2] = {
-		.start	= IRQ_EINT(9),
-		.end	= IRQ_EINT(9),
-		.flags	= IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL,
-	},
-};
-
-static struct dm9000_plat_data mid_dm9000_platdata = {
-	.flags		= DM9000_PLATF_16BITONLY | DM9000_PLATF_NO_EEPROM,
-	.dev_addr	= { 0x00, 0x09, 0xc0, 0xff, 0xec, 0x48 },
-};
-
-struct platform_device mid_dm9000 = {
-	.name			= "dm9000",
-	.id				= -1,
-	.num_resources	= ARRAY_SIZE(mid_dm9000_resources),
-	.resource		= mid_dm9000_resources,
-	.dev			= {
-		.platform_data = &mid_dm9000_platdata,
-	},
-};
-#endif
-
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC0 (6144 * SZ_1K)
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC1 (9900 * SZ_1K)
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC2 (6144 * SZ_1K)
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC0 (36864 * SZ_1K)
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC1 (36864 * SZ_1K)
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMD (3072 * SZ_1K * \
-                                             (CONFIG_FB_S3C_NR_BUFFERS + \
-                                                 (CONFIG_FB_S3C_NUM_OVLY_WIN * \
-                                                  CONFIG_FB_S3C_NUM_BUF_OVLY_WIN)))
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_JPEG (8192 * SZ_1K)
-
-/* 1920 * 1080 * 4 (RGBA)
- * - framesize == 1080p : 1920 * 1080 * 2(16bpp) * 2(double buffer) = 8MB
- * - framesize <  1080p : 1080 *  720 * 4(32bpp) * 2(double buffer) = under 8MB
- **/
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_G2D (8192 * SZ_1K)
-#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_TEXSTREAM (3000 * SZ_1K)
-#define  S5PV210_ANDROID_PMEM_MEMSIZE_PMEM_GPU1 (3300 * SZ_1K)
-
-static struct s5p_media_device s5pv210_media_devs[] = {
-        [0] = {
-                .id = S5P_MDEV_MFC,
-                .name = "mfc",
-                .bank = 0,
-                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC0,
-                .paddr = 0,
-        },
-        [1] = {
-                .id = S5P_MDEV_MFC,
-                .name = "mfc",
-                .bank = 1,
-                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC1,
-                .paddr = 0,
-        },
-        [2] = {
-                .id = S5P_MDEV_FIMC0,
-                .name = "fimc0",
-                .bank = 1,
-                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC0,
-                .paddr = 0,
-        },
-        [3] = {
-                .id = S5P_MDEV_FIMC1,
-                .name = "fimc1",
-                .bank = 1,
-                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC1,
-                .paddr = 0,
-        },
-        [4] = {
-                .id = S5P_MDEV_FIMC2,
-                .name = "fimc2",
-                .bank = 1,
-                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC2,
-                .paddr = 0,
-        },
-        [5] = {
-                .id = S5P_MDEV_JPEG,
-                .name = "jpeg",
-                .bank = 0,
-                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_JPEG,
-                .paddr = 0,
-        },
-		[6] = {
-                .id = S5P_MDEV_FIMD,
-                .name = "fimd",
-                .bank = 1,
-                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMD,
-                .paddr = 0,
-        },
-        [7] = {
-				.id = S5P_MDEV_TEXSTREAM,
-				.name = "texstream",
-				.bank = 1,
-				.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_TEXSTREAM,
-				.paddr = 0,
-		},
-		[8] = {
-				.id = S5P_MDEV_PMEM_GPU1,
-				.name = "pmem_gpu1",
-				.bank = 0, /* OneDRAM */
-				.memsize = S5PV210_ANDROID_PMEM_MEMSIZE_PMEM_GPU1,
-				.paddr = 0,
-		},
-		[9] = {
-				.id = S5P_MDEV_G2D,
-				.name = "g2d",
-				.bank = 0,
-				.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_G2D,
-				.paddr = 0,
-		},
-};
-
-#ifdef CONFIG_ANDROID_PMEM
-static struct android_pmem_platform_data pmem_pdata = {
-        .name = "pmem",
-        .no_allocator = 1,
-        .cached = 1,
-        .start = 0,
-        .size = 0,
-};
-
-static struct android_pmem_platform_data pmem_gpu1_pdata = {
-        .name = "pmem_gpu1",
-        .no_allocator = 1,
-        .cached = 1,
-        .buffered = 1,
-        .start = 0,
-        .size = 0,
-};
-
-static struct android_pmem_platform_data pmem_adsp_pdata = {
-        .name = "pmem_adsp",
-        .no_allocator = 1,
-        .cached = 1,
-        .buffered = 1,
-        .start = 0,
-        .size = 0,
-};
-
-static struct platform_device pmem_device = {
-        .name = "android_pmem",
-        .id = 0,
-        .dev = { .platform_data = &pmem_pdata },
-};
-
-static struct platform_device pmem_gpu1_device = {
-        .name = "android_pmem",
-        .id = 1,
-        .dev = { .platform_data = &pmem_gpu1_pdata },
-};
-
-static struct platform_device pmem_adsp_device = {
-        .name = "android_pmem",
-        .id = 2,
-        .dev = { .platform_data = &pmem_adsp_pdata },
-};
-
-static void __init android_pmem_set_platdata(void)
-{
-        pmem_pdata.start = (u32)s5p_get_media_memory_bank(S5P_MDEV_PMEM, 0);
-        pmem_pdata.size = (u32)s5p_get_media_memsize_bank(S5P_MDEV_PMEM, 0);
-
-        pmem_gpu1_pdata.start =
-                (u32)s5p_get_media_memory_bank(S5P_MDEV_PMEM_GPU1, 0);
-        pmem_gpu1_pdata.size =
-                (u32)s5p_get_media_memsize_bank(S5P_MDEV_PMEM_GPU1, 0);
-
-        pmem_adsp_pdata.start =
-                (u32)s5p_get_media_memory_bank(S5P_MDEV_PMEM_ADSP, 0);
-        pmem_adsp_pdata.size =
-                (u32)s5p_get_media_memsize_bank(S5P_MDEV_PMEM_ADSP, 0);
-}
-#endif
-
-#ifdef CONFIG_MFD_MAX8998_URBETTER
 static struct regulator_consumer_supply ldo3_consumer[] = {
-	REGULATOR_SUPPLY("pd_io", "s3c-usbgadget")
+	REGULATOR_SUPPLY("pd_io", "s3c-usbgadget"),
 };
 
 static struct regulator_consumer_supply ldo4_consumer[] = {
@@ -335,15 +141,7 @@ static struct regulator_consumer_supply ldo7_consumer[] = {
 };
 
 static struct regulator_consumer_supply ldo8_consumer[] = {
-	REGULATOR_SUPPLY("pd_core", "s3c-usbgadget")
-};
-
-static struct regulator_consumer_supply buck1_consumer[] = {
-	{   .supply = "vddarm", },
-};
-
-static struct regulator_consumer_supply buck2_consumer[] = {
-	{   .supply = "vddint", },
+	REGULATOR_SUPPLY("pd_core", "s3c-usbgadget"),
 };
 
 static struct regulator_init_data mid_ldo2_data = {
@@ -361,7 +159,7 @@ static struct regulator_init_data mid_ldo2_data = {
 
 static struct regulator_init_data mid_ldo3_data = {
 	.constraints	= {
-		.name		= "VUOTG_D_1.1V/VUHOST_D_1.1V",
+		.name		= "VUOTG_D+VUHOST_D_1.1V",
 		.min_uV		= 1100000,
 		.max_uV		= 1100000,
 		.apply_uV	= 1,
@@ -392,11 +190,12 @@ static struct regulator_init_data mid_ldo4_data = {
 
 static struct regulator_init_data mid_ldo5_data = {
 	.constraints	= {
-		.name		= "VMMC_2.8V/VEXT_2.8V",
+		.name		= "VMMC+VEXT_2.8V",
 		.min_uV		= 2800000,
 		.max_uV		= 2800000,
 		.apply_uV	= 1,
 		.always_on	= 1,
+ 		.valid_ops_mask = REGULATOR_CHANGE_STATUS,
 		.state_mem	= {
 			.enabled = 1,
 		},
@@ -430,13 +229,13 @@ static struct regulator_init_data mid_ldo7_data = {
 			.enabled = 1,
 		},
 	},
-	.num_consumer_supplies  = ARRAY_SIZE(ldo7_consumer),
-	.consumer_supplies  = ldo7_consumer,
+	.num_consumer_supplies	= ARRAY_SIZE(ldo7_consumer),
+	.consumer_supplies	= ldo7_consumer,
 };
 
 static struct regulator_init_data mid_ldo8_data = {
 	.constraints	= {
-		.name		= "VUOTG_A_3.3V/VUHOST_A_3.3V",
+		.name		= "VUOTG_A+VUHOST_A_3.3V",
 		.min_uV		= 3300000,
 		.max_uV		= 3300000,
 		.apply_uV	= 1,
@@ -451,7 +250,7 @@ static struct regulator_init_data mid_ldo8_data = {
 
 static struct regulator_init_data mid_ldo9_data = {
 	.constraints	= {
-		.name		= "{VADC/VSYS/VKEY}_2.8V",
+		.name		= "VADC+VSYS+VKEY_2.8V",
 		.min_uV		= 2800000,
 		.max_uV		= 2800000,
 		.apply_uV	= 1,
@@ -462,6 +261,14 @@ static struct regulator_init_data mid_ldo9_data = {
 	},
 };
 
+static struct regulator_consumer_supply buck1_consumer[] = {
+	{   .supply = "vddarm", },
+};
+
+static struct regulator_consumer_supply buck2_consumer[] = {
+	{   .supply = "vddint", },
+};
+ 
 static struct regulator_init_data mid_buck1_data = {
 	.constraints	= {
 		.name		= "VCC_ARM",
@@ -493,8 +300,8 @@ static struct regulator_init_data mid_buck2_data = {
 			.disabled = 1,
 		},
 	},
-	.num_consumer_supplies  = ARRAY_SIZE(buck2_consumer),
-	.consumer_supplies  = buck2_consumer,
+	.num_consumer_supplies	= ARRAY_SIZE(buck2_consumer),
+	.consumer_supplies	= buck2_consumer,
 };
 
 static struct regulator_init_data mid_buck3_data = {
@@ -531,7 +338,100 @@ static struct max8998_platform_data max8998_pdata = {
 	.regulators	= mid_regulators,
 	.charger	= NULL,
 };
-#endif
+
+static struct resource mid_dm9000_resources[] = {
+	[0] = {
+		.start	= S5PV210_PA_SROM_BANK5,
+		.end	= S5PV210_PA_SROM_BANK5,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.start	= S5PV210_PA_SROM_BANK5 + 2,
+		.end	= S5PV210_PA_SROM_BANK5 + 2,
+		.flags	= IORESOURCE_MEM,
+	},
+	[2] = {
+		.start	= IRQ_EINT(9),
+		.end	= IRQ_EINT(9),
+		.flags	= IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL,
+	},
+};
+
+static struct dm9000_plat_data mid_dm9000_platdata = {
+	.flags		= DM9000_PLATF_16BITONLY | DM9000_PLATF_NO_EEPROM,
+	.dev_addr	= { 0x00, 0x09, 0xc0, 0xff, 0xec, 0x48 },
+};
+
+struct platform_device mid_dm9000 = {
+	.name			= "dm9000",
+	.id				= -1,
+	.num_resources	= ARRAY_SIZE(mid_dm9000_resources),
+	.resource		= mid_dm9000_resources,
+	.dev			= {
+		.platform_data = &mid_dm9000_platdata,
+	},
+};
+
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC0 	(8192 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC2 	(8192 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC0 	(14336 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC1 	(21504 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMD 	(800 * 480 * 4 * \
+						(CONFIG_FB_S3C_NR_BUFFERS + \
+						(CONFIG_FB_S3C_NUM_OVLY_WIN * \
+						CONFIG_FB_S3C_NUM_BUF_OVLY_WIN)))
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_JPEG 	(4096 * SZ_1K)
+
+static struct s5p_media_device s5pv210_media_devs[] = {
+        [0] = {
+                .id = S5P_MDEV_MFC,
+                .name = "mfc",
+                .bank = 0,
+                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC0,
+                .paddr = 0,
+        },
+        [1] = {
+                .id = S5P_MDEV_MFC,
+                .name = "mfc",
+                .bank = 1,
+                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC1,
+                .paddr = 0,
+        },
+        [2] = {
+                .id = S5P_MDEV_FIMC0,
+                .name = "fimc0",
+                .bank = 1,
+                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC0,
+                .paddr = 0,
+        },
+        [4] = {
+                .id = S5P_MDEV_FIMC2,
+                .name = "fimc2",
+                .bank = 1,
+                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC2,
+                .paddr = 0,
+        },
+        [5] = {
+                .id = S5P_MDEV_JPEG,
+                .name = "jpeg",
+                .bank = 0,
+                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_JPEG,
+                .paddr = 0,
+        },
+        [6] = {
+                .id = S5P_MDEV_FIMD,
+                .name = "fimd",
+                .bank = 1,
+                .memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMD,
+                .paddr = 0,
+        },
+};
+
+#define LCD_BUS_NUM     3
+#define S5PV210_GPD_0_0_TOUT_0  (0x2)
+#define S5PV210_GPD_0_1_TOUT_1  (0x2 << 4)
+#define S5PV210_GPD_0_2_TOUT_2  (0x2 << 8)
+#define S5PV210_GPD_0_3_TOUT_3  (0x2 << 12)
 
 static struct s3cfb_lcd lcd_ut7gm = {
 	.width = 800,
@@ -611,129 +511,17 @@ static struct s3cfb_lcd lcd_ut10gm = {
 	},
 };
 
-static void mid_lcd_onoff(unsigned int onoff) {
-    int err;
-
-    unsigned int nGPIOs[] = {GPIO_LCD_BACKLIGHT_POWER, GPIO_LCD_BACKLIGHT_POWERB};
-
-	if ((err = gpio_request(nGPIOs[0], "lcd-backlight-en"))) {
-		printk(KERN_ERR "failed to request gpio for lcd control: %d\n", err);
-		return;
-	}
-
-	if ((err = gpio_request(nGPIOs[1], "lcd-backlight-en"))) {
-		printk(KERN_ERR "failed to request gpio for lcd control: %d\n", err);
-        gpio_free(nGPIOs[0]);
-		return;
-	}
-
-    printk("%s: %d\n", "mid_lcd_onoff", onoff);
-
-    if (onoff) {
-        gpio_direction_output(nGPIOs[0], 1);
-        gpio_direction_output(nGPIOs[1], 0);
-    } else {
-        gpio_direction_output(nGPIOs[0], 0);
-        gpio_direction_output(nGPIOs[1], 1);
-    }
-
-	mdelay(20);
-    gpio_free(nGPIOs[1]);
-    gpio_free(nGPIOs[0]);
-}
-
-static void mid_backlight_onoff(int onoff) {
-    int err;
-
-    unsigned int nGPIO = GPIO_BACKLIGHT;
-	err = gpio_request(nGPIO, "backlight-en");
-
-	if (err) {
-		printk(KERN_ERR "failed to request gpio for backlight control: %d\n", err);
-		return;
-	}
-
-    printk("%s: %d\n", "mid_backlight_onoff", onoff);
-
-    if (onoff)
-        gpio_direction_output(nGPIO, 1);
-    else
-        gpio_direction_output(nGPIO, 0);
-
-	mdelay(10);
-    gpio_free(nGPIO);
-}
-
-static void mid_lcd_cfg_gpio(struct platform_device *pdev) {
-    int i;
-
-    for (i = 0; i < 8; i++) {
-        s3c_gpio_cfgpin(S5PV210_GPF0(i), S3C_GPIO_SFN(2));
-        s3c_gpio_setpull(S5PV210_GPF0(i), S3C_GPIO_PULL_NONE);
-    }
-
-    for (i = 0; i < 8; i++) {
-        s3c_gpio_cfgpin(S5PV210_GPF1(i), S3C_GPIO_SFN(2));
-        s3c_gpio_setpull(S5PV210_GPF1(i), S3C_GPIO_PULL_NONE);
-    }
-
-    for (i = 0; i < 8; i++) {
-        s3c_gpio_cfgpin(S5PV210_GPF2(i), S3C_GPIO_SFN(2));
-        s3c_gpio_setpull(S5PV210_GPF2(i), S3C_GPIO_PULL_NONE);
-    }
-
-    for (i = 0; i < 6; i++) {
-        s3c_gpio_cfgpin(S5PV210_GPF3(i), S3C_GPIO_SFN(2));
-        s3c_gpio_setpull(S5PV210_GPF3(i), S3C_GPIO_PULL_NONE);
-    }
-
-    /* mDNIe SEL: why we shall write 0x2 ? */
-    writel(0x2, S5P_MDNIE_SEL);
-
-    /* drive strength to max */
-    writel(0xffffffff, S5PV210_GPF0_BASE + 0xc);
-    writel(0xffffffff, S5PV210_GPF1_BASE + 0xc);
-    writel(0xffffffff, S5PV210_GPF2_BASE + 0xc);
-    writel(0x000000ff, S5PV210_GPF3_BASE + 0xc);
-}
-
-int mid_lcd_backlight_onoff(struct platform_device *pdev, int onoff) {
-    if (onoff) {
-        mid_lcd_onoff(1);
-        mid_backlight_onoff(1);
-    } else {
-        mid_backlight_onoff(0);
-        mid_lcd_onoff(0);
-    }
-
-	return 0;
-}
-
-int mid_lcd_backlight_on(struct platform_device *pdev) {
-    return mid_lcd_backlight_onoff(pdev, 1);
-}
-
-static int mid_lcd_reset(struct platform_device *pdev) {
-    mid_backlight_onoff(0);
-    mid_lcd_onoff(0);
-	mdelay(180);
-    mid_lcd_onoff(1);
-    mid_backlight_onoff(1);
-
-    return 0;
-}
-
 static struct s3c_platform_fb mid_fb_data __initdata = {
 	.hw_ver	= 0x62,
+	.clk_name       = "sclk_fimd",
 	.nr_wins = 5,
-	.lcd = &lcd_ut7gm,
 	.default_win = CONFIG_FB_S3C_DEFAULT_WINDOW,
 	.swap = FB_SWAP_WORD | FB_SWAP_HWORD,
 
-	.cfg_gpio	        = mid_lcd_cfg_gpio,
-	.backlight_on	    = mid_lcd_backlight_on,
-	.backlight_onoff    = mid_lcd_backlight_onoff,
-	.reset_lcd	        = mid_lcd_reset,
+	.cfg_gpio	    = s3cfb_cfg_gpio,
+	.backlight_on	    = s3cfb_backlight_on,
+	.backlight_onoff    = s3cfb_backlight_onoff,
+	.reset_lcd	    = s3cfb_reset_lcd,
 };
 
 static void mid_detect_lcd(void) {
@@ -758,11 +546,6 @@ static void mid_detect_lcd(void) {
         printk("\n\n\n\n *** FATAL ERROR: cannot determine LCD ***\n\n\n");
     }
 }
-
-#define S5PV210_GPD_0_0_TOUT_0  (0x2)
-#define S5PV210_GPD_0_1_TOUT_1  (0x2 << 4)
-#define S5PV210_GPD_0_2_TOUT_2  (0x2 << 8)
-#define S5PV210_GPD_0_3_TOUT_3  (0x2 << 12)
 
 static struct { int gpio, cfg; } mid_pwm_cfg[] = {
     {
@@ -813,15 +596,15 @@ static void mid_backlight_exit(struct device *dev) {
 }
 
 static struct platform_pwm_backlight_data mid_backlight_data = {
-	.pwm_id			= 0,
+	.pwm_id		= 0,
 	.max_brightness	= 255,
-	.dft_brightness	= 127,
-	.pwm_period_ns	= 40000,
-	.init			= mid_backlight_init,
-	.exit			= mid_backlight_exit,
+	.dft_brightness	= 128,
+	.pwm_period_ns  = 40 * 1000,
+	.init		= mid_backlight_init,
+	.exit		= mid_backlight_exit,
 };
 
-static struct platform_device mid_backlight = {
+static struct platform_device mid_backlight_device = {
 	.name = "pwm-backlight",
 	.dev = {
 		.parent = &s3c_device_timer[0].dev,
@@ -829,14 +612,12 @@ static struct platform_device mid_backlight = {
 	},
 };
 
-#ifdef CONFIG_S5P_ADC
 static struct s3c_adc_mach_info s3c_adc_platform __initdata = {
 	/* s5pc110 support 12-bit resolution */
 	.delay  = 10000,
 	.presc  = 49,
 	.resolution = 12,
 };
-#endif
 
 static struct s3c_ts_mach_info s3c_ts_platform __initdata = {
 	.delay                  = 10000,
@@ -845,45 +626,6 @@ static struct s3c_ts_mach_info s3c_ts_platform __initdata = {
 	.oversampling_shift     = 2,
 	.s3c_adc_con            = ADC_TYPE_2,
 };
-
-/* Touch srcreen */
-static struct resource s3c_ts_resource[] = {
-	[0] = {
-		.start = SAMSUNG_PA_ADC1,
-		.end   = SAMSUNG_PA_ADC1 + SZ_4K - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start = IRQ_PENDN1,
-		.end   = IRQ_PENDN1,
-		.flags = IORESOURCE_IRQ,
-	},
-	[2] = {
-		.start = IRQ_ADC1,
-		.end   = IRQ_ADC1,
-		.flags = IORESOURCE_IRQ,
-	}
-};
-
-struct platform_device s3c_device_ts = {
-	.name		    = "s3c-ts",
-	.id		        = -1,
-	.num_resources  = ARRAY_SIZE(s3c_ts_resource),
-	.resource	    = s3c_ts_resource,
-};
-
-void __init s3c_ts_set_platdata(struct s3c_ts_mach_info *pd)
-{
-	struct s3c_ts_mach_info *npd;
-
-	npd = kmalloc(sizeof(*npd), GFP_KERNEL);
-	if (npd) {
-		memcpy(npd, pd, sizeof(*npd));
-		s3c_device_ts.dev.platform_data = npd;
-	} else {
-		pr_err("no memory for Touchscreen platform data\n");
-	}
-}
 
 static int midcam_power_en(int onoff) {
     int err;
@@ -894,7 +636,7 @@ static int midcam_power_en(int onoff) {
     };
 
     if ((err = gpio_request(nGPIOs[0], "camera-reset-hi253"))) {
-        printk(KERN_ERR "Failed to request GPHJ4[4] for camera reset (hi253)!\n");
+        printk(KERN_ERR "Failed to request GPJ4[4] for camera reset (hi253)!\n");
         return err;
     }
 
@@ -1100,8 +842,8 @@ static struct s3c_platform_jpeg jpeg_plat __initdata = {
 };
 #endif
 
-#ifdef CONFIG_DM9000
 static void __init mid_dm9000_init(void) {
+
 	unsigned int tmp;
 
 	gpio_request(S5PV210_MP01(5), "nCS5");
@@ -1116,7 +858,6 @@ static void __init mid_dm9000_init(void) {
 	tmp |= (1 << S5P_SROM_BW__NCS5__SHIFT);
 	__raw_writel(tmp, S5P_SROM_BW);
 }
-#endif
 
 static struct platform_device mid_battery = {
     .name = "mid-battery",
@@ -1136,16 +877,21 @@ static struct platform_device mid_control = {
 static struct i2c_board_info mid_i2c_devs0[] __initdata = {
 #ifdef CONFIG_SND_SOC_WM8580
 	{
-        I2C_BOARD_INFO("wm8580", (0x36>>1)),
-    },
+		I2C_BOARD_INFO("wm8580", (0x36>>1)),
+	},
 #endif
 };
 
 static struct i2c_board_info mid_i2c_devs1[] __initdata = {
+#ifdef CONFIG_VIDEO_TV20
+        {
+                I2C_BOARD_INFO("s5p_ddc", (0x74>>1)),
+        },
+#endif
 #ifdef CONFIG_SND_SOC_WM8976
 	{
-        I2C_BOARD_INFO("wm8976", (0x34>>1)),
-    },
+		I2C_BOARD_INFO("wm8976", (0x34>>1)),
+	},
 #endif
 #ifdef CONFIG_ACCEL_MMA7660
 	{
@@ -1155,13 +901,11 @@ static struct i2c_board_info mid_i2c_devs1[] __initdata = {
 };
 
 static struct i2c_board_info mid_i2c_devs2[] __initdata = {
-#ifdef CONFIG_MFD_MAX8998_URBETTER
-    {
+	{
 		/* The address is 0xCC used since SRAD = 0 */
 		I2C_BOARD_INFO("max8998", (0xCC >> 1)),
 		.platform_data = &max8998_pdata,
-    },
-#endif
+	},
 };
 
 static struct i2c_board_info i2c_ft5x0x_ts __initdata = {
@@ -1317,62 +1061,28 @@ static void __init sound_init(void) {
 	__raw_writel(reg, S5P_OTHERS);
 }
 
-static void __init mid_setup_clocks(void) {
-	struct clk *pclk;
-	struct clk *clk;
-
 #ifdef CONFIG_S3C_DEV_HSMMC
-	/* set MMC0 clock */
-	clk = clk_get(&s3c_device_hsmmc0.dev, "sclk_mmc");
-	pclk = clk_get(NULL, "mout_mpll");
-	clk_set_parent(clk, pclk);
-	clk_set_rate(clk, 50*MHZ);
-
-	pr_info("%s: %s: source is %s, rate is %ld\n",
-				__func__, clk->name, clk->parent->name,
-				clk_get_rate(clk));
+static struct s3c_sdhci_platdata s5pv210_hsmmc0_pdata __initdata = {
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
+	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
+#ifdef CONFIG_S5PV210_SDHCI_CH0_8BIT
+	.max_width = 8,
+	.host_caps = MMC_CAP_8_BIT_DATA,
+#endif
+};
 #endif
 
 #ifdef CONFIG_S3C_DEV_HSMMC1
-	/* set MMC1 clock */
-	clk = clk_get(&s3c_device_hsmmc1.dev, "sclk_mmc");
-	pclk = clk_get(NULL, "mout_mpll");
-	clk_set_parent(clk, pclk);
-	clk_set_rate(clk, 50*MHZ);
-
-	pr_info("%s: %s: source is %s, rate is %ld\n",
-				__func__, clk->name, clk->parent->name,
-				clk_get_rate(clk));
+static struct s3c_sdhci_platdata s5pv210_hsmmc1_pdata __initdata = {
+/* For Atheros WiFi */
+	.cd_type = S3C_SDHCI_CD_PERMANENT,
+	.clk_type = S3C_SDHCI_CLK_DIV_EXTERNAL,
+};
 #endif
-
-#ifdef CONFIG_S3C_DEV_HSMMC2
-	/* set MMC2 clock */
-	clk = clk_get(&s3c_device_hsmmc2.dev, "sclk_mmc");
-	pclk = clk_get(NULL, "mout_mpll");
-	clk_set_parent(clk, pclk);
-	clk_set_rate(clk, 50*MHZ);
-
-	pr_info("%s: %s: source is %s, rate is %ld\n",
-				__func__, clk->name, clk->parent->name,
-				clk_get_rate(clk));
-#endif
-
-#ifdef CONFIG_S3C_DEV_HSMMC3
-	/* set MMC3 clock */
-	clk = clk_get(&s3c_device_hsmmc3.dev, "sclk_mmc");
-	pclk = clk_get(NULL, "mout_mpll");
-	clk_set_parent(clk, pclk);
-	clk_set_rate(clk, 50*MHZ);
-
-	pr_info("%s: %s: source is %s, rate is %ld\n",
-				__func__, clk->name, clk->parent->name,
-			 clk_get_rate(clk));
-#endif
-}
 
 #ifdef CONFIG_USB_SUPPORT
 /* Initializes OTG Phy. */
-void otg_host_phy_init(void)
+void otg_phy_init(void)
 {
 	/* USB PHY0 Enable */
 	writel(readl(S5P_USB_PHY_CONTROL) | (0x1<<0),
@@ -1396,7 +1106,7 @@ void otg_host_phy_init(void)
 	writel((readl(S3C_USBOTG_PHYTUNE) & ~(0xf)) | (0x1<<2) | (0x1<<1),
 			S3C_USBOTG_PHYTUNE);
 }
-EXPORT_SYMBOL(otg_host_phy_init);
+EXPORT_SYMBOL(otg_phy_init);
 
 /* USB Control request data struct must be located here for DMA transfer */
 struct usb_ctrlrequest usb_ctrl __attribute__((aligned(64)));
@@ -1539,16 +1249,9 @@ static void mid_pm_restart(char mode, const char *cmd) {
 }
 
 static struct platform_device *mid_devices[] __initdata = {
-#ifdef CONFIG_FB_S3C
+
+	&s3c_device_adc,
 	&s3c_device_fb,
-#endif
-#ifdef CONFIG_VIDEO_JPEG_V2
-	&s3c_device_jpeg,
-#endif
-#ifdef CONFIG_VIDEO_G2D
-	&s3c_device_g2d,
-#endif
-    &s3c_device_g3d,
 
 #ifdef CONFIG_S3C_DEV_HSMMC
 	&s3c_device_hsmmc0,
@@ -1564,34 +1267,30 @@ static struct platform_device *mid_devices[] __initdata = {
 #endif
 
 	&s3c_device_i2c0,
-#ifdef CONFIG_S3C_DEV_I2C1
 	&s3c_device_i2c1,
-#endif
-#ifdef CONFIG_S3C_DEV_I2C2
 	&s3c_device_i2c2,
-#endif
-
+	&s3c_device_ts,
 	&s3c_device_rtc,
 	&s3c_device_wdt,
 	&s5pv210_device_iis0,
 	&s5pv210_device_iis1,
+
 	&samsung_asoc_dma,
+	&mid_dm9000,
 
-#ifdef CONFIG_S3C_DEV_NAND
-	&s3c_device_nand,
-#endif
-
-#ifdef CONFIG_VIDEO_MFC50
-	&s3c_device_mfc,
-#endif
-
-#ifdef CONFIG_HAVE_PWM
 	&s3c_device_timer[0],
 	&s3c_device_timer[1],
 	&s3c_device_timer[2],
 	&s3c_device_timer[3],
-#endif
 
+	&mid_backlight_device,
+	&mid_battery,
+	&mid_button,
+	&mid_control,
+
+#ifdef CONFIG_S3C_DEV_NAND
+	&s3c_device_nand,
+#endif
 #ifdef CONFIG_USB_EHCI_HCD
 	&s3c_device_usb_ehci,
 #endif
@@ -1613,37 +1312,33 @@ static struct platform_device *mid_devices[] __initdata = {
 #endif
 #endif
 
-#ifdef CONFIG_S5P_ADC
-    &s3c_device_adc,
-#endif
-
 #ifdef CONFIG_VIDEO_FIMC
-    &s3c_device_fimc0,
-    &s3c_device_fimc1,
-    &s3c_device_fimc2,
+	&s3c_device_fimc0,
+	&s3c_device_fimc1,
+	&s3c_device_fimc2,
+#endif
+#ifdef CONFIG_VIDEO_FIMC_MIPI
+	&s3c_device_csis,
+#endif
+#ifdef CONFIG_VIDEO_JPEG_V2
+	&s3c_device_jpeg,
+#endif
+#ifdef CONFIG_VIDEO_MFC50
+	&s3c_device_mfc,
 #endif
 #ifdef CONFIG_S5PV210_POWER_DOMAIN
-	&s5pv210_pd_audio,
-	&s5pv210_pd_cam,
 	&s5pv210_pd_tv,
 	&s5pv210_pd_lcd,
 	&s5pv210_pd_g3d,
 	&s5pv210_pd_mfc,
+	&s5pv210_pd_audio,
+	&s5pv210_pd_cam,
 #endif
-#ifdef CONFIG_ANDROID_PMEM
-	&pmem_device,
-	&pmem_gpu1_device,
-	&pmem_adsp_device,
-#endif
-
-    &mid_backlight,
-    &mid_battery,
-    &mid_button,
-    &mid_control,
-
-#ifdef CONFIG_DM9000
-	&mid_dm9000,
-#endif
+	&s3c_device_g3d,
+	&s3c_device_lcd,
+	&s5p_device_tvout,
+	&s5p_device_cec,
+	&s5p_device_hpd,
 };
 
 unsigned int pm_debug_scratchpad;
@@ -1658,15 +1353,7 @@ static void __init mid_fixup(struct machine_desc *desc,
 	mi->bank[1].start = 0x40000000;
 	mi->bank[1].size = 256 * SZ_1M;
 
-    mi->nr_banks = 2;
-
-    // Use our internal RTC (smdkc110-rtc.c)
-	s3c_device_rtc.name = "smdkc110-rtc";
-
-#ifdef CONFIG_S3C_DEV_NAND
-    // Use the s3c_nand driver (s3c_nand.c)
-	s3c_device_nand.name = "s5pv210-nand";
-#endif
+	mi->nr_banks = 2;
 }
 
 static void __init mid_map_io(void) {
@@ -1674,73 +1361,68 @@ static void __init mid_map_io(void) {
 	s3c24xx_init_clocks(24000000);
 	s5pv210_gpiolib_init();
 	s3c24xx_init_uarts(mid_uartcfgs, ARRAY_SIZE(mid_uartcfgs));
-	s5p_reserve_bootmem(s5pv210_media_devs, ARRAY_SIZE(s5pv210_media_devs), 0);
+	s5p_reserve_bootmem(s5pv210_media_devs, ARRAY_SIZE(s5pv210_media_devs), S5P_RANGE_MFC);
+	s3c_device_nand.name = "s5pv210-nand";
 }
 
 static void __init mid_machine_init(void) {
+
+	s3c_pm_init();
+	sound_init();
+	mid_audio_jack_init();
+	mid_dm9000_init();
+
+	platform_add_devices(mid_devices, ARRAY_SIZE(mid_devices));
+
 	pm_power_off = mid_power_off;
 	arm_pm_restart = mid_pm_restart;
 
-    // Read configuration
-    mid_init_cfg();
-    mid_gpio_init();
+	// Read configuration
+	mid_init_cfg();
+	mid_gpio_init();
 
-    // Setup devices
-    mid_detect_lcd();
-    mid_detect_camera();
-    mid_detect_i2cdevs();
-
-#ifdef CONFIG_USB_EHCI_HCD
-    // Power up the USB hub.
-    mid_usbhost_setpower(1);
-#endif
-
-#if defined(CONFIG_PM)
-	s3c_pm_init();
-#endif
+	// Setup devices
+	mid_detect_lcd();
+	mid_detect_camera();
+	mid_detect_i2cdevs();
 
 #ifdef CONFIG_ANDROID_PMEM
-    android_pmem_set_platdata();
+	android_pmem_set_platdata();
 #endif
 
-#ifdef CONFIG_DM9000
-	mid_dm9000_init();
-#endif
+	s3c_adc_set_platdata(&s3c_adc_platform);
+	s3c_nand_set_platdata(&mid_nand_info);
+	s3c_ts_set_platdata(&s3c_ts_platform);
 
 	s3c_i2c0_set_platdata(NULL);
 	s3c_i2c1_set_platdata(NULL);
 	s3c_i2c2_set_platdata(NULL);
-
-	i2c_register_board_info(0, mid_i2c_devs0, ARRAY_SIZE(mid_i2c_devs0));
-	i2c_register_board_info(1, mid_i2c_devs1, ARRAY_SIZE(mid_i2c_devs1));
-	i2c_register_board_info(2, mid_i2c_devs2, ARRAY_SIZE(mid_i2c_devs2));
-
-#ifdef CONFIG_S3C_DEV_NAND
-    s3c_nand_set_platdata(&mid_nand_info);
-#endif
-
-#ifdef CONFIG_USB_EHCI_HCD
-    s3c_ehci_set_platdata(&mid_ehci_pdata);
-#endif
+	i2c_register_board_info(0, mid_i2c_devs0,
+			ARRAY_SIZE(mid_i2c_devs0));
+	i2c_register_board_info(1, mid_i2c_devs1,
+			ARRAY_SIZE(mid_i2c_devs1));
+	i2c_register_board_info(2, mid_i2c_devs2,
+			ARRAY_SIZE(mid_i2c_devs2));
 
 	s3c_fb_set_platdata(&mid_fb_data);
-    platform_add_devices(mid_devices, ARRAY_SIZE(mid_devices));
 
-    sound_init();
-    mid_audio_jack_init();
+	s3c_ehci_set_platdata(&mid_ehci_pdata);
 
-#ifdef CONFIG_S5P_ADC
-	s3c_adc_set_platdata(&s3c_adc_platform);
+#ifdef CONFIG_S3C_DEV_HSMMC
+	s3c_sdhci0_set_platdata(&s5pv210_hsmmc0_pdata);
+	s3c_sdhci1_set_platdata(&s5pv210_hsmmc1_pdata);
 #endif
-
-	s3c_ts_set_platdata(&s3c_ts_platform);
 
 #ifdef CONFIG_VIDEO_FIMC
     /* fimc */
-    s3c_fimc0_set_platdata(&fimc_plat_lsi);
-    s3c_fimc1_set_platdata(&fimc_plat_lsi);
-    s3c_fimc2_set_platdata(&fimc_plat_lsi);
+	s3c_fimc0_set_platdata(&fimc_plat_lsi);
+	s3c_fimc1_set_platdata(&fimc_plat_lsi);
+	s3c_fimc2_set_platdata(&fimc_plat_lsi);
 #endif
+#ifdef CONFIG_VIDEO_FIMC_MIPI
+	s3c_csis_set_platdata(NULL);
+#endif
+
 #ifdef CONFIG_VIDEO_JPEG_V2
 	s3c_jpeg_set_platdata(&jpeg_plat);
 #endif
@@ -1748,37 +1430,17 @@ static void __init mid_machine_init(void) {
 	 /* mfc */
 	s3c_mfc_set_platdata(NULL);
 #endif
-
-#ifdef CONFIG_S3C_DEV_HSMMC
-	s5pv210_default_sdhci0();
-#endif
-#ifdef CONFIG_S3C_DEV_HSMMC1
-	s5pv210_default_sdhci1();
-#endif
-#ifdef CONFIG_S3C_DEV_HSMMC2
-	s5pv210_default_sdhci2();
-#endif
-#ifdef CONFIG_S3C_DEV_HSMMC3
-	s5pv210_default_sdhci3();
-#endif
-#ifdef CONFIG_S5PV210_SETUP_SDHCI
-	s3c_sdhci_set_platdata();
-#endif
-
-#ifdef CONFIG_MFD_MAX8998_URBETTER
+#ifdef CONFIG_MFD_MAX8998
 	regulator_has_full_constraints();
 #endif
-
-    mid_backlight_onoff(0);
-    mid_lcd_onoff(0);
-    mid_setup_clocks();
+	mid_usbhost_setpower(1);
 }
 
 MACHINE_START(SMDKV210, "SMDKV210")
 	.boot_params	= S5P_PA_SDRAM + 0x100,
-	.fixup			= mid_fixup,
-	.init_irq		= s5pv210_init_irq,
-	.map_io			= mid_map_io,
+	.fixup		= mid_fixup,
+	.init_irq	= s5pv210_init_irq,
+	.map_io		= mid_map_io,
 	.init_machine	= mid_machine_init,
-	.timer			= &s5p_systimer,
+        .timer          = &s5p_systimer,
 MACHINE_END

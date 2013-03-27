@@ -45,4 +45,3 @@ static inline void s3c_pm_arch_update_uart(void __iomem *regs,
 {
 	/* nothing here yet */
 }
-

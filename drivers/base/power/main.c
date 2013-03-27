@@ -825,8 +825,10 @@ int dpm_suspend_noirq(pm_message_t state)
 		mutex_lock(&dpm_list_mtx);
 		if (error) {
 			pm_dev_err(dev, state, " late", error);
+#ifndef CONFIG_S5P_HIGH_RES_TIMERS
 			put_device(dev);
 			break;
+#endif
 		}
 		if (!list_empty(&dev->power.entry))
 			list_move(&dev->power.entry, &dpm_noirq_list);

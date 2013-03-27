@@ -81,11 +81,6 @@ static unsigned long isolate_freepages_block(struct zone *zone,
 
 		if (!pfn_valid_within(blockpfn))
 			continue;
-
-		/* Watch for unexpected holes punched in the memmap */
-		if (!memmap_valid_within(blockpfn, page, zone))
-			continue;
-
 		nr_scanned++;
 
 		if (!PageBuddy(page))
@@ -180,11 +175,6 @@ static void isolate_freepages(struct zone *zone,
 		 * pages do not belong to a single zone.
 		 */
 		page = pfn_to_page(pfn);
-
-		/* Watch for unexpected holes punched in the memmap */
-		if (!memmap_valid_within(pfn, page, zone))
-			continue;
-
 		if (page_zone(page) != zone)
 			continue;
 
@@ -347,11 +337,6 @@ static isolate_migrate_t isolate_migratepages(struct zone *zone,
 		 * as memory compaction should not move pages between nodes.
 		 */
 		page = pfn_to_page(low_pfn);
-
-		/* Watch for unexpected holes punched in the memmap */
-		if (!memmap_valid_within(low_pfn, page, zone))
-			continue;
-
 		if (page_zone(page) != zone)
 			continue;
 
@@ -729,14 +714,12 @@ static int compact_node(int nid)
 }
 
 /* Compact all nodes in the system */
-static int compact_nodes(void)
+static void compact_nodes(void)
 {
 	int nid;
 
 	for_each_online_node(nid)
 		compact_node(nid);
-
-	return COMPACT_COMPLETE;
 }
 
 /* The written value is actually unused, all memory is compacted */
@@ -747,7 +730,7 @@ int sysctl_compaction_handler(struct ctl_table *table, int write,
 			void __user *buffer, size_t *length, loff_t *ppos)
 {
 	if (write)
-		return compact_nodes();
+		compact_nodes();
 
 	return 0;
 }

@@ -41,10 +41,8 @@ struct clk_should_be_running {
 
 static struct regulator_consumer_supply s5pv210_pd_audio_supply[] = {
 	REGULATOR_SUPPLY("pd", "samsung-i2s.0"),
-#ifdef CONFIG_MACH_MID
 	REGULATOR_SUPPLY("pd", "samsung-i2s.1"),
 	REGULATOR_SUPPLY("pd", "samsung-i2s.2"),
-#endif
 };
 
 static struct regulator_consumer_supply s5pv210_pd_cam_supply[] = {
@@ -53,7 +51,6 @@ static struct regulator_consumer_supply s5pv210_pd_cam_supply[] = {
 	REGULATOR_SUPPLY("pd", "s3c-fimc.2"),
 	REGULATOR_SUPPLY("pd", "s3c-jpg"),
 	REGULATOR_SUPPLY("pd", "s3c-csis"),
-	REGULATOR_SUPPLY("pd", "s5p-rotator"),
 };
 
 static struct regulator_consumer_supply s5pv210_pd_tv_supply[] = {
@@ -62,7 +59,6 @@ static struct regulator_consumer_supply s5pv210_pd_tv_supply[] = {
 
 static struct regulator_consumer_supply s5pv210_pd_lcd_supply[] = {
 	REGULATOR_SUPPLY("pd", "s3cfb"),
-	REGULATOR_SUPPLY("pd", "s3c-g2d"),
 };
 
 static struct regulator_consumer_supply s5pv210_pd_g3d_supply[] = {
@@ -132,14 +128,12 @@ struct clk_should_be_running s5pv210_pd_audio_clk[] = {
 		.clk_name	= "i2scdclk",
 		.dev		= &s5pv210_device_iis0.dev,
 	}, {
-#ifdef CONFIG_MACH_MID
 		.clk_name	= "i2scdclk",
 		.dev		= &s5pv210_device_iis1.dev,
 	}, {
 		.clk_name	= "i2scdclk",
 		.dev		= &s5pv210_device_iis2.dev,
 	}, {
-#endif
 		/* end of the clock array */
 	},
 };
@@ -155,11 +149,11 @@ struct clk_should_be_running s5pv210_pd_cam_clk[] = {
 		.clk_name	= "fimc",
 		.dev		= &s3c_device_fimc2.dev,
 	}, {
+		.clk_name	= "sclk_csis",
+		.dev		= &s3c_device_csis.dev,
+	}, {
 		.clk_name	= "jpeg",
 		.dev		= &s3c_device_jpeg.dev,
-	}, {
-		.clk_name	= "rot",
-		.dev		= &s5p_device_rotator.dev,
 	}, {
 		/* end of the clock array */
 	},
@@ -187,12 +181,12 @@ struct clk_should_be_running s5pv210_pd_lcd_clk[] = {
 	{
 		.clk_name	= "lcd",
 		.dev		= &s3c_device_fb.dev,
-	}, {
+	},/* {
 		.clk_name	= "dsim",
 		.dev		= &s3c_device_fb.dev,
-	}, {
-		.clk_name	= "g2d",
-		.dev		= &s3c_device_g2d.dev,
+	},*/ { 
+		.clk_name	= "sclk_fimg2d",
+		.dev		= &s3c_device_fb.dev,
 	}, {
 		/* end of the clock array */
 	},
@@ -200,7 +194,7 @@ struct clk_should_be_running s5pv210_pd_lcd_clk[] = {
 
 struct clk_should_be_running s5pv210_pd_g3d_clk[] = {
 	{
-		.clk_name	= "sclk",
+		.clk_name	= "sclk_g3d",
 		.dev		= &s3c_device_g3d.dev,
 	}, {
 		/* end of the clock array */
@@ -209,7 +203,7 @@ struct clk_should_be_running s5pv210_pd_g3d_clk[] = {
 
 struct clk_should_be_running s5pv210_pd_mfc_clk[] = {
 	{
-		.clk_name	= "mfc",
+		.clk_name	= "sclk_mfc",
 		.dev		= &s3c_device_mfc.dev,
 	}, {
 		/* end of the clock array */
@@ -343,6 +337,7 @@ static int s5pv210_pd_pwr_off(int ctrl)
 static int s5pv210_pd_ctrl(int ctrlbit, int enable)
 {
 	u32 pd_reg = __raw_readl(S5P_NORMAL_CFG);
+       //printk("\n CTRL bit is %d",ctrlbit);
 
 	if (enable) {
 		__raw_writel((pd_reg | ctrlbit), S5P_NORMAL_CFG);
@@ -366,7 +361,8 @@ static int s5pv210_pd_clk_enable(struct clk_should_be_running *clk_run)
 			break;
 
 		clkp = clk_get(clk_run[i].dev, clk_run[i].clk_name);
-
+                pr_debug("\n s5pv210_pd_clk_enable clk_run[%d].clk_name is %s",i,clk_run[i].clk_name);
+				//printk("\n s5pv210_pd_clk_enable clk_run[%d].clk_name is %s",i,clk_run[i].clk_name);
 		if (IS_ERR(clkp)) {
 			printk(KERN_ERR "unable to get clock %s\n",
 					clk_run[i].clk_name);

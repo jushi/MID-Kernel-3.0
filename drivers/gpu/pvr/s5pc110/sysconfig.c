@@ -49,6 +49,7 @@
 #define SYS_SGX_ACTIVE_POWER_LATENCY_MS		(500)
 #endif
 
+#define G3D_CLK
 typedef struct _SYS_SPECIFIC_DATA_TAG_
 {
 	IMG_UINT32 ui32SysSpecificData;
@@ -90,14 +91,17 @@ IMG_UINT32   PVRSRV_BridgeDispatchKM( IMG_UINT32  Ioctl,
  * CPU freq is below 200MHz.
  */
 #define MIN_CPU_KHZ_FREQ 200000
-
+#ifdef G3D_CLK
 static struct clk *g3d_clock;
+#endif
 static struct regulator *g3d_pd_regulator;
 
 static int limit_adjust_cpufreq_notifier(struct notifier_block *nb,
 					 unsigned long event, void *data)
 {
 	struct cpufreq_policy *policy = data;
+
+	return 0 ;  //todo 
 
 	if (event != CPUFREQ_ADJUST)
 		return 0;
@@ -116,18 +120,26 @@ static struct notifier_block cpufreq_limit_notifier = {
 
 static PVRSRV_ERROR EnableSGXClocks(void)
 {
+#ifdef G3D_CLK
 	regulator_enable(g3d_pd_regulator);
 	clk_enable(g3d_clock);
+#ifdef CONFIG_CPU_FREQ
 	cpufreq_update_policy(current_thread_info()->cpu);
+#endif
+#endif
 
 	return PVRSRV_OK;
 }
 
 static PVRSRV_ERROR DisableSGXClocks(void)
 {
+#ifdef G3D_CLK
 	clk_disable(g3d_clock);
 	regulator_disable(g3d_pd_regulator);
+#ifdef CONFIG_CPU_FREQ
 	cpufreq_update_policy(current_thread_info()->cpu);
+#endif
+#endif
 
 	return PVRSRV_OK;
 }
@@ -215,6 +227,7 @@ PVRSRV_ERROR SysInitialise(IMG_VOID)
 
 #if defined(SUPPORT_ACTIVE_POWER_MANAGEMENT)
 	{
+#ifdef G3D_CLK
 		extern struct platform_device *gpsPVRLDMDev;
 
 		g3d_pd_regulator = regulator_get(&gpsPVRLDMDev->dev, "pd");
@@ -225,12 +238,13 @@ PVRSRV_ERROR SysInitialise(IMG_VOID)
 			return PVRSRV_ERROR_INIT_FAILURE;
 		}
 
-		g3d_clock = clk_get(&gpsPVRLDMDev->dev, "sclk");
+		g3d_clock = clk_get(&gpsPVRLDMDev->dev, "sclk_g3d");
 		if (IS_ERR(g3d_clock))
 		{
 			PVR_DPF((PVR_DBG_ERROR, "G3D failed to find g3d clock source-enable"));
 			return PVRSRV_ERROR_INIT_FAILURE;
 		}
+#endif
 
 		EnableSGXClocks();
 	}
@@ -562,10 +576,14 @@ PVRSRV_ERROR SysDeinitialise (SYS_DATA *psSysData)
 	psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
 
 #if defined(SUPPORT_ACTIVE_POWER_MANAGEMENT)
+#ifdef G3D_CLK
 	/* TODO: regulator and clk put. */
 	cpufreq_unregister_notifier(&cpufreq_limit_notifier,
 				    CPUFREQ_POLICY_NOTIFIER);
+#ifdef CONFIG_CPU_FREQ
 	cpufreq_update_policy(current_thread_info()->cpu);
+#endif
+#endif
 #endif
 
 #if defined(SYS_USING_INTERRUPTS)

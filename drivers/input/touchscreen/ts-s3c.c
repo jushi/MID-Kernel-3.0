@@ -61,7 +61,7 @@
 #include <mach/hardware.h>
 #include <mach/adc.h>
 #include <mach/regs-adc.h>
-#include <mach/ts-s3c.h>
+#include <plat/ts.h>
 #include <mach/irqs.h>
 
 #define X_COOR_MIN      180
@@ -125,9 +125,7 @@ static void touch_timer_fire(unsigned long data)
 
 			input_report_abs(ts->dev, ABS_X, x);
 			input_report_abs(ts->dev, ABS_Y, y);
-#ifndef TOUCHSCREEN_S3C_GB
 			input_report_abs(ts->dev, ABS_PRESSURE, 1);
-#endif
 			input_report_key(ts->dev, BTN_TOUCH, 1);
 			input_sync(ts->dev);
 		}
@@ -140,12 +138,8 @@ static void touch_timer_fire(unsigned long data)
 		writel(readl(ts_base+S3C_ADCCON) | S3C_ADCCON_ENABLE_START, ts_base + S3C_ADCCON);
 	} else {
 		ts->count = 0;
-#ifdef TOUCHSCREEN_S3C_GB
-		input_report_abs(ts->dev, ABS_X, ts->xp);
-		input_report_abs(ts->dev, ABS_Y, ts->yp);
-#else
+
 		input_report_abs(ts->dev, ABS_PRESSURE, 0);
-#endif
 		input_report_key(ts->dev, BTN_TOUCH, 0);
 		input_sync(ts->dev);
 
@@ -194,26 +188,12 @@ static irqreturn_t stylus_action(int irqno, void *param)
 	data1 = readl(ts_base + S3C_ADCDAT1);
 
 	if (ts->resol_bit == 12) {
-#if defined(CONFIG_TOUCHSCREEN_NEW)
-		ts->yp += S3C_ADCDAT0_XPDATA_MASK_12BIT -
-			(data0 & S3C_ADCDAT0_XPDATA_MASK_12BIT);
-		ts->xp += S3C_ADCDAT1_YPDATA_MASK_12BIT -
-			(data1 & S3C_ADCDAT1_YPDATA_MASK_12BIT);
-#else
 		ts->xp += S3C_ADCDAT0_XPDATA_MASK_12BIT -
 			(data0 & S3C_ADCDAT0_XPDATA_MASK_12BIT);
 		ts->yp += data1 & S3C_ADCDAT1_YPDATA_MASK_12BIT;
-#endif
 	} else {
-#if defined(CONFIG_TOUCHSCREEN_NEW)
-		ts->yp += S3C_ADCDAT0_XPDATA_MASK -
-			(data0 & S3C_ADCDAT0_XPDATA_MASK);
-		ts->xp += S3C_ADCDAT1_YPDATA_MASK -
-			(data1 & S3C_ADCDAT1_YPDATA_MASK);
-#else
 		ts->xp += data0 & S3C_ADCDAT0_XPDATA_MASK;
 		ts->yp += data1 & S3C_ADCDAT1_YPDATA_MASK;
-#endif
 	}
 
 	ts->count++;

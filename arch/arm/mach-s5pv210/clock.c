@@ -400,16 +400,6 @@ static struct clk init_clocks_off[] = {
 		.parent		= &clk_hclk_dsys.clk,
 		.enable		= s5pv210_clk_ip1_ctrl,
 		.ctrlbit	= (1<<2),
-#ifdef CONFIG_S5P_DEV_ONENAND
-	}, {
-		.name		= "onenand",
-		.id		= -1,
-		.parent		= &clk_hclk_psys.clk,
-		.enable		= s5pv210_clk_ip1_ctrl,
-		.ctrlbit	= (1 << 24),
-		.dev		= &s5p_device_onenand.dev,
-#endif
-#ifdef CONFIG_S3C_DEV_NAND
 	}, {
 		.name		= "nand",
 		.id		= -1,
@@ -417,7 +407,6 @@ static struct clk init_clocks_off[] = {
 		.enable		= s5pv210_clk_ip1_ctrl,
 		.ctrlbit	= ((1 << 28) | (1 << 24)),
 		.dev		= &s3c_device_nand.dev,
-#endif
 	}, {
 		.name		= "cfcon",
 		.id		= 0,
@@ -533,6 +522,24 @@ static struct clk init_clocks_off[] = {
 		.enable		= s5pv210_clk_ip3_ctrl,
 		.ctrlbit	= (1 << 6),
 	}, {
+		.name		= "i2s",
+		.id		= 1,
+		.parent		= &clk_p,
+		.enable		= s5pv210_clk_ip3_ctrl,
+		.ctrlbit	= S5P_CLKGATE_IP3_I2S1,
+	}, {
+		.name		= "i2s",
+		.id		= 2,
+		.parent		= &clk_p,
+		.enable		= s5pv210_clk_ip3_ctrl,
+		.ctrlbit	= S5P_CLKGATE_IP3_I2S2,
+	}, {
+		.name		= "ac97",
+		.id		= -1,
+		.parent		= &clk_p,
+		.enable		= s5pv210_clk_ip3_ctrl,
+		.ctrlbit	= (1 << 1),
+	}, {
 		.name		= "spdif",
 		.id		= -1,
 		.parent		= &clk_p,
@@ -545,7 +552,6 @@ static struct clk init_clocks_off[] = {
 		.enable		= s5pv210_clk_ip3_ctrl,
 		.ctrlbit	= S5P_CLKGATE_IP3_PCM2,
 	}, {
-#ifdef CONFIG_MACH_MID
 		.name		= "pcm",
 		.id		= 1,
 		.parent		= &clk_pclk_psys.clk,
@@ -558,7 +564,6 @@ static struct clk init_clocks_off[] = {
 		.enable		= s5pv210_clk_ip3_ctrl,
 		.ctrlbit	= S5P_CLKGATE_IP3_PCM0,
 	}, {
-#endif
 		.name		= "i2c-hdmiphy",
 		.id		= -1,
 		.parent		= &clk_pclk_psys.clk,
@@ -1247,7 +1252,7 @@ static struct clksrc_clk clksrcs[] = {
 		.reg_div = { .reg = S5P_CLK_DIV2, .shift = 4, .size = 4 },
 	}, {
 		.clk		= {
-			.name		= "g2d",    // namko: Changed from "sclk_fimg2d".
+			.name		= "sclk_fimg2d",
 			.id		= -1,
 			.enable		= s5pv210_clk_ip0_ctrl,
 			.ctrlbit	= (1 << 12),
@@ -1257,7 +1262,7 @@ static struct clksrc_clk clksrcs[] = {
 		.reg_div = { .reg = S5P_CLK_DIV2, .shift = 8, .size = 4 },
 	}, {
 		.clk		= {
-			.name		= "sclk",
+			.name		= "sclk_g3d",
 			.id		= -1,
 			.enable		= s5pv210_clk_ip0_ctrl,
 			.ctrlbit	= (1 << 8),
@@ -1425,11 +1430,11 @@ static int s5pv210_epll_set_rate(struct clk *clk, unsigned long rate)
 {
 	unsigned int epll_con, epll_con_k;
 	unsigned int i;
-
+#if 0 //epll clock getting changed durning suspend-resume without this function
 	/* Return if nothing changed */
 	if (clk->rate == rate)
 		return 0;
-
+#endif 
 	epll_con = __raw_readl(S5P_EPLL_CON);
 	epll_con_k = __raw_readl(S5P_EPLL_CON1);
 

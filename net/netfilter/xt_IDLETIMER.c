@@ -68,15 +68,15 @@ static DEFINE_MUTEX(list_mutex);
 
 static struct kobject *idletimer_tg_kobj;
 
-static void notify_netlink_uevent(const char *iface, struct idletimer_tg *timer)
+static void notify_netlink_uevent(const char *label, struct idletimer_tg *timer)
 {
-	char iface_msg[NLMSG_MAX_SIZE];
+	char label_msg[NLMSG_MAX_SIZE];
 	char state_msg[NLMSG_MAX_SIZE];
-	char *envp[] = { iface_msg, state_msg, NULL };
+	char *envp[] = { label_msg, state_msg, NULL };
 	int res;
 
-	res = snprintf(iface_msg, NLMSG_MAX_SIZE, "INTERFACE=%s",
-		       iface);
+	res = snprintf(label_msg, NLMSG_MAX_SIZE, "LABEL=%s",
+		       label);
 	if (NLMSG_MAX_SIZE <= res) {
 		pr_err("message too long (%d)", res);
 		return;
@@ -87,7 +87,7 @@ static void notify_netlink_uevent(const char *iface, struct idletimer_tg *timer)
 		pr_err("message too long (%d)", res);
 		return;
 	}
-	pr_debug("putting nlmsg: <%s> <%s>\n", iface_msg, state_msg);
+	pr_debug("putting nlmsg: <%s> <%s>\n", label_msg, state_msg);
 	kobject_uevent_env(idletimer_tg_kobj, KOBJ_CHANGE, envp);
 	return;
 
@@ -132,7 +132,7 @@ static ssize_t idletimer_tg_show(struct kobject *kobj, struct attribute *attr,
 		return sprintf(buf, "0 %d\n",
 			jiffies_to_msecs(now - expires) / 1000);
 	else
-	return sprintf(buf, "0\n");
+		return sprintf(buf, "0\n");
 }
 
 static void idletimer_tg_work(struct work_struct *work)
@@ -240,7 +240,7 @@ static int idletimer_tg_checkentry(const struct xt_tgchk_param *par)
 	int ret;
 	unsigned long now = jiffies;
 
-	pr_debug("checkentry targinfo%s\n", info->label);
+	pr_debug("checkentry targinfo %s\n", info->label);
 
 	if (info->timeout == 0) {
 		pr_debug("timeout value is zero\n");
@@ -305,7 +305,7 @@ static void idletimer_tg_destroy(const struct xt_tgdtor_param *par)
 		kfree(info->timer);
 	} else {
 		pr_debug("decreased refcnt of timer %s to %u\n",
-			 info->label, info->timer->refcnt);
+		info->label, info->timer->refcnt);
 	}
 
 	mutex_unlock(&list_mutex);

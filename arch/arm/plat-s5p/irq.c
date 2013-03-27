@@ -30,6 +30,7 @@
 static int wakeup_source[] = {
 	IRQ_RTC_ALARM,
 	IRQ_RTC_TIC,
+#if 0 //todo following irqs can be added later
 	IRQ_ADC,
 	IRQ_ADC1,
 	IRQ_KEYPAD,
@@ -40,6 +41,7 @@ static int wakeup_source[] = {
 	IRQ_I2S0,
 	IRQ_SYSTIMER,
 	IRQ_CEC
+#endif
 };
 
 /*
