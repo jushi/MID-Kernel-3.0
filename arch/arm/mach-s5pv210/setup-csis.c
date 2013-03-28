@@ -42,7 +42,7 @@ void s3c_csis_cfg_phy_global(int on)
 	}
 }
 
-int s3c_csis_clk_on(struct platform_device *pdev, struct clk **clk)
+/*int s3c_csis_clk_on(struct platform_device *pdev)
 {
 	struct clk *sclk_csis = NULL;
 	struct clk *parent = NULL;
@@ -50,7 +50,7 @@ int s3c_csis_clk_on(struct platform_device *pdev, struct clk **clk)
 
 	pdata = to_csis_plat(&pdev->dev);
 
-	/* mout_mpll */
+	/* mout_mpll 
 	parent = clk_get(&pdev->dev, pdata->srclk_name);
 	if (IS_ERR(parent)) {
 		dev_err(&pdev->dev, "failed to get parent clock(%s) for csis\n",
@@ -58,7 +58,7 @@ int s3c_csis_clk_on(struct platform_device *pdev, struct clk **clk)
 		goto err_clk1;
 	}
 
-	/* sclk_csis */
+	/* sclk_csis 
 	sclk_csis = clk_get(&pdev->dev, pdata->clk_name);
 	if (IS_ERR(sclk_csis)) {
 		dev_err(&pdev->dev, "failed to get csis(%s) clock source\n",
@@ -79,14 +79,14 @@ err_clk1:
 	return -EINVAL;
 }
 
-int s3c_csis_clk_off(struct platform_device *pdev, struct clk **clk)
+int s3c_csis_clk_off(struct platform_device *pdev)
 {
 	struct clk *sclk_csis = NULL;
 	struct s3c_platform_csis *pdata;
 
 	pdata = to_csis_plat(&pdev->dev);
 
-	/* sclk_csis */
+	/* sclk_csis 
 	sclk_csis = clk_get(&pdev->dev, pdata->clk_name);
 	if (IS_ERR(sclk_csis)) {
 		dev_err(&pdev->dev, "failed to get csis clock(%s) source\n",
@@ -94,9 +94,9 @@ int s3c_csis_clk_off(struct platform_device *pdev, struct clk **clk)
 		return -EINVAL;
 	}
 
-	/* clock disable for csis */
+	/* clock disable for csis 
 	clk_disable(sclk_csis);
 
 	return 0;
-}
+}*/
 

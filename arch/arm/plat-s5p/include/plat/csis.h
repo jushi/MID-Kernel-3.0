@@ -13,7 +13,7 @@
 #ifndef __ASM_PLAT_CSIS_H
 #define __ASM_PLAT_CSIS_H __FILE__
 
-#define to_csis_plat(d)         (to_platform_device(d)->dev.platform_data)
+/*#define to_csis_plat(d)         (to_platform_device(d)->dev.platform_data)*/
 struct platform_device;
 
 struct s3c_platform_csis {
@@ -23,15 +23,15 @@ struct s3c_platform_csis {
 
 	void		(*cfg_gpio)(void);
 	void		(*cfg_phy_global)(int on);
-	int		(*clk_on)(struct platform_device *pdev, struct clk **clk);
-	int		(*clk_off)(struct platform_device *pdev, struct clk **clk);
+	int		(*clk_on)(struct platform_device *pdev);
+	int		(*clk_off)(struct platform_device *pdev);
 };
 
 extern void s3c_csis_set_platdata(struct s3c_platform_csis *csis);
 extern void s3c_csis_cfg_gpio(void);
 extern void s3c_csis_cfg_phy_global(int on);
 /* platform specific clock functions */
-extern int s3c_csis_clk_on(struct platform_device *pdev, struct clk **clk);
-extern int s3c_csis_clk_off(struct platform_device *pdev, struct clk **clk);
+extern int s3c_csis_clk_on(struct platform_device *pdev);
+extern int s3c_csis_clk_off(struct platform_device *pdev);
 
 #endif /* __ASM_PLAT_CSIS_H */
